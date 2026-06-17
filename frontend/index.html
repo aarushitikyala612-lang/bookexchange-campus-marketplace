@@ -1,0 +1,1265 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BookExchange - Campus Book Marketplace</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"></script>
+<style>
+/*  DESIGN TOKENS  */
+:root {
+  --ink:        #1a1a2e;
+  --ink-light:  #2d2d44;
+  --brand:      #16213e;
+  --accent:     #e94560;
+  --accent-dim: #c73652;
+  --gold:       #f5a623;
+  --gold-light: #fef6e7;
+  --green:      #0f9b58;
+  --green-light:#e8f8f0;
+  --teal:       #0f7a8c;
+  --sky:        #e8f4fd;
+  --white:      #ffffff;
+  --paper:      #f8f6f2;
+  --gray-100:   #f2f2f4;
+  --gray-200:   #e4e4e8;
+  --gray-300:   #d0d0d8;
+  --gray-400:   #9898a8;
+  --gray-500:   #6b6b7e;
+  --gray-600:   #4a4a5a;
+  --gray-800:   #1f1f30;
+  --r:          8px;
+  --r-lg:       16px;
+  --sh:         0 2px 8px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.05);
+  --sh-md:      0 6px 24px rgba(0,0,0,0.10);
+  --sh-lg:      0 16px 48px rgba(0,0,0,0.14);
+  --transition: 0.18s cubic-bezier(0.4,0,0.2,1);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--paper);color:var(--ink);line-height:1.6;font-size:15px;}
+a{color:inherit;text-decoration:none;}
+button{cursor:pointer;font-family:inherit;font-size:14px;border:none;transition:var(--transition);}
+img{max-width:100%;display:block;}
+input,select,textarea{font-family:inherit;}
+
+/*  SCROLLBAR  */
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--gray-300);border-radius:3px;}
+
+/*  BUTTONS  */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 20px;border-radius:var(--r);font-weight:600;font-size:13px;transition:var(--transition);}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-primary:hover{background:var(--accent-dim);transform:translateY(-1px);box-shadow:0 4px 12px rgba(233,69,96,0.3);}
+.btn-brand{background:var(--brand);color:#fff;}
+.btn-brand:hover{background:var(--ink-light);transform:translateY(-1px);}
+.btn-outline{background:transparent;color:var(--accent);border:1.5px solid var(--accent);}
+.btn-outline:hover{background:var(--accent);color:#fff;}
+.btn-ghost{background:transparent;color:var(--gray-500);border:1.5px solid var(--gray-300);}
+.btn-ghost:hover{border-color:var(--gray-400);color:var(--ink);}
+.btn-green{background:var(--green);color:#fff;}
+.btn-green:hover{background:#0d8a4d;transform:translateY(-1px);}
+.btn-sm{padding:6px 14px;font-size:12px;}
+.btn-lg{padding:12px 28px;font-size:15px;}
+
+/*  TOP PROMO BANNER  */
+.promo-bar{background:var(--accent);color:#fff;text-align:center;padding:8px 1rem;font-size:13px;font-weight:500;letter-spacing:0.01em;}
+.promo-bar span{opacity:0.8;margin:0 8px;}
+
+/*  NAVBAR  */
+.navbar{background:var(--brand);color:#fff;position:sticky;top:0;z-index:200;box-shadow:0 2px 12px rgba(0,0,0,0.2);}
+.nav-top{display:flex;align-items:center;gap:16px;padding:0 1.5rem;height:64px;}
+.nav-logo{display:flex;align-items:center;gap:10px;font-size:20px;font-weight:800;white-space:nowrap;flex-shrink:0;}
+.nav-logo .logo-icon{width:38px;height:38px;background:var(--accent);border-radius:var(--r);display:flex;align-items:center;justify-content:center;font-size:18px;}
+.nav-logo .logo-text{color:#fff;}
+.nav-logo .logo-sub{font-size:10px;font-weight:400;opacity:0.6;display:block;line-height:1;}
+
+.nav-search{flex:1;max-width:600px;margin:0 16px;position:relative;}
+.nav-search input{width:100%;padding:10px 16px 10px 44px;border-radius:var(--r);border:none;background:rgba(255,255,255,0.12);color:#fff;font-size:14px;transition:var(--transition);}
+.nav-search input::placeholder{color:rgba(255,255,255,0.5);}
+.nav-search input:focus{outline:none;background:rgba(255,255,255,0.2);box-shadow:0 0 0 2px rgba(255,255,255,0.3);}
+.nav-search .search-icon-nav{position:absolute;left:14px;top:50%;transform:translateY(-50%);opacity:0.6;font-size:16px;}
+.nav-search .search-btn{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:var(--accent);color:#fff;border:none;border-radius:6px;padding:5px 14px;font-size:13px;font-weight:600;cursor:pointer;}
+
+.nav-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:auto;}
+.nav-icon-btn{background:rgba(255,255,255,0.1);color:#fff;border:none;width:38px;height:38px;border-radius:var(--r);display:flex;align-items:center;justify-content:center;font-size:16px;position:relative;transition:var(--transition);}
+.nav-icon-btn:hover{background:rgba(255,255,255,0.2);}
+.nav-icon-btn .badge-count{position:absolute;top:-4px;right:-4px;background:var(--accent);color:#fff;font-size:10px;font-weight:700;min-width:18px;height:18px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid var(--brand);}
+
+.nav-user-btn{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.1);color:#fff;border:none;padding:6px 12px;border-radius:var(--r);font-size:13px;font-weight:500;transition:var(--transition);}
+.nav-user-btn:hover{background:rgba(255,255,255,0.2);}
+.nav-user-avatar{width:28px;height:28px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;}
+
+.nav-bottom{background:rgba(0,0,0,0.2);padding:0 1.5rem;}
+.nav-links{display:flex;align-items:center;gap:0;overflow-x:auto;scrollbar-width:none;}
+.nav-links::-webkit-scrollbar{display:none;}
+.nav-link{color:rgba(255,255,255,0.7);padding:10px 16px;font-size:13px;font-weight:500;white-space:nowrap;border-bottom:2px solid transparent;transition:var(--transition);cursor:pointer;display:flex;align-items:center;gap:6px;}
+.nav-link:hover,.nav-link.active{color:#fff;border-bottom-color:var(--accent);}
+
+/*  PAGES  */
+.page{display:none;}
+.page.active{display:block;}
+
+/*  HERO CAROUSEL  */
+.hero-section{position:relative;overflow:hidden;height:380px;}
+.hero-slides{display:flex;transition:transform 0.6s cubic-bezier(0.4,0,0.2,1);height:100%;}
+.hero-slide{min-width:100%;height:100%;position:relative;display:flex;align-items:center;}
+.hero-slide-0{background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);}
+.hero-slide-1{background:linear-gradient(135deg,#1a0a2e 0%,#2d1b69 50%,#11998e 100%);}
+.hero-slide-2{background:linear-gradient(135deg,#0f2027 0%,#203a43 50%,#2c5364 100%);}
+.hero-content{padding:2.5rem 4rem;color:#fff;max-width:600px;z-index:2;}
+.hero-eyebrow{font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--gold);margin-bottom:12px;}
+.hero-content h1{font-size:2.6rem;font-weight:800;line-height:1.2;margin-bottom:1rem;letter-spacing:-0.5px;}
+.hero-content h1 em{color:var(--accent);font-style:normal;}
+.hero-content p{font-size:1rem;opacity:0.82;margin-bottom:1.5rem;max-width:420px;}
+.hero-btns{display:flex;gap:12px;flex-wrap:wrap;}
+.hero-deco{position:absolute;right:0;top:0;width:45%;height:100%;overflow:hidden;opacity:0.08;}
+.hero-deco-books{font-size:12rem;position:absolute;right:-20px;top:-20px;transform:rotate(-15deg);}
+.hero-indicators{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:3;}
+.hero-dot{width:8px;height:8px;border-radius:4px;background:rgba(255,255,255,0.4);cursor:pointer;transition:var(--transition);}
+.hero-dot.active{background:#fff;width:24px;}
+.hero-nav{position:absolute;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.15);color:#fff;border:none;width:40px;height:40px;border-radius:50%;font-size:18px;cursor:pointer;z-index:3;transition:var(--transition);}
+.hero-nav:hover{background:rgba(255,255,255,0.3);}
+.hero-prev{left:16px;}
+.hero-next{right:16px;}
+
+/*  STATS BAR  */
+.stats-strip{background:#fff;border-bottom:1px solid var(--gray-200);padding:0;}
+.stats-inner{max-width:1200px;margin:0 auto;display:flex;justify-content:space-around;padding:1.2rem 2rem;}
+.stat-item{text-align:center;}
+.stat-num{font-size:1.6rem;font-weight:800;color:var(--accent);display:block;}
+.stat-lbl{font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.06em;}
+
+/*  CATEGORIES BAR  */
+.categories-bar{background:#fff;border-bottom:1px solid var(--gray-200);padding:0.8rem 2rem;}
+.categories-inner{max-width:1200px;margin:0 auto;display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;}
+.categories-inner::-webkit-scrollbar{display:none;}
+.cat-chip{display:flex;align-items:center;gap:6px;padding:7px 16px;border-radius:20px;border:1.5px solid var(--gray-200);background:#fff;color:var(--gray-600);font-size:13px;font-weight:500;white-space:nowrap;cursor:pointer;transition:var(--transition);}
+.cat-chip:hover,.cat-chip.active{border-color:var(--accent);background:var(--accent);color:#fff;}
+
+/*  SECTION LAYOUT  */
+.section{padding:2rem 1.5rem;}
+.section-inner{max-width:1200px;margin:0 auto;}
+.section-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:1.4rem;}
+.section-title{font-size:1.2rem;font-weight:800;color:var(--ink);display:flex;align-items:center;gap:8px;}
+.section-title em{color:var(--accent);font-style:normal;}
+.section-link{font-size:13px;color:var(--accent);font-weight:600;}
+.section-link:hover{text-decoration:underline;}
+
+/*  HORIZONTAL CAROUSEL  */
+.hcarousel-wrap{position:relative;}
+.hcarousel{display:flex;gap:16px;overflow-x:auto;scroll-behavior:smooth;scrollbar-width:none;padding-bottom:8px;}
+.hcarousel::-webkit-scrollbar{display:none;}
+.hcarousel-prev,.hcarousel-next{position:absolute;top:50%;transform:translateY(-50%);background:#fff;border:1px solid var(--gray-200);color:var(--ink);width:36px;height:36px;border-radius:50%;font-size:16px;cursor:pointer;z-index:5;box-shadow:var(--sh-md);display:flex;align-items:center;justify-content:center;transition:var(--transition);}
+.hcarousel-prev:hover,.hcarousel-next:hover{background:var(--accent);color:#fff;border-color:var(--accent);}
+.hcarousel-prev{left:-12px;}
+.hcarousel-next{right:-12px;}
+
+/*  BOOK CARD  */
+.book-card{background:#fff;border-radius:var(--r-lg);border:1px solid var(--gray-200);overflow:hidden;transition:var(--transition);cursor:pointer;flex-shrink:0;width:190px;}
+.book-card:hover{box-shadow:var(--sh-md);transform:translateY(-4px);}
+.book-cover{height:200px;background:linear-gradient(135deg,var(--sky),#dbeafe);position:relative;overflow:hidden;}
+.book-cover img{width:100%;height:100%;object-fit:cover;transition:var(--transition);}
+.book-card:hover .book-cover img{transform:scale(1.04);}
+.book-cover-placeholder{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:4rem;background:linear-gradient(135deg,#dbeafe,#e0e7ff);}
+.book-badge{position:absolute;top:8px;left:8px;font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;}
+.badge-sale{background:var(--green);color:#fff;}
+.badge-exchange{background:var(--gold);color:#fff;}
+.badge-donation{background:#7c3aed;color:#fff;}
+.badge-hot{background:var(--accent);color:#fff;}
+.badge-new{background:var(--teal);color:#fff;}
+.book-wish{position:absolute;top:8px;right:8px;background:rgba(255,255,255,0.9);border:none;width:30px;height:30px;border-radius:50%;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:var(--transition);}
+.book-wish:hover,.book-wish.active{background:var(--accent);color:#fff;}
+.book-info{padding:12px;}
+.book-title{font-size:13px;font-weight:700;color:var(--ink);margin-bottom:3px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.4;}
+.book-author{font-size:11px;color:var(--gray-400);margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.book-rating{display:flex;align-items:center;gap:4px;margin-bottom:8px;}
+.stars{color:var(--gold);font-size:11px;}
+.rating-num{font-size:11px;color:var(--gray-500);}
+.book-price-row{display:flex;align-items:baseline;justify-content:space-between;}
+.book-price{font-size:1rem;font-weight:800;color:var(--accent);}
+.book-orig-price{font-size:11px;color:var(--gray-400);text-decoration:line-through;}
+.book-discount{font-size:11px;color:var(--green);font-weight:700;}
+.book-cond{font-size:10px;padding:2px 7px;border-radius:3px;font-weight:600;margin-top:6px;display:inline-block;}
+.cond-Good{background:var(--green-light);color:var(--green);}
+.cond-Fair{background:var(--gold-light);color:var(--gold);}
+.cond-Poor{background:#fce7f3;color:#be185d;}
+
+/*  LISTING GRID  */
+.listing-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:20px;}
+.listing-card{background:#fff;border-radius:var(--r-lg);border:1px solid var(--gray-200);overflow:hidden;cursor:pointer;transition:var(--transition);}
+.listing-card:hover{box-shadow:var(--sh-md);transform:translateY(-3px);}
+.listing-cover{height:210px;position:relative;overflow:hidden;background:linear-gradient(135deg,#dbeafe,#e0e7ff);}
+.listing-cover img{width:100%;height:100%;object-fit:cover;transition:var(--transition);}
+.listing-card:hover .listing-cover img{transform:scale(1.03);}
+.listing-cover-placeholder{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:5rem;}
+.listing-body{padding:14px;}
+.listing-title{font-size:14px;font-weight:700;color:var(--ink);margin-bottom:3px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.4;}
+.listing-author{font-size:12px;color:var(--gray-400);margin-bottom:8px;}
+.listing-price{font-size:1.1rem;font-weight:800;color:var(--accent);margin-bottom:6px;}
+.listing-meta{display:flex;justify-content:space-between;align-items:center;}
+.listing-seller{font-size:11px;color:var(--gray-500);display:flex;align-items:center;gap:4px;}
+.trust-star{color:var(--gold);}
+
+/*  SEARCH PAGE  */
+.search-page-header{background:#fff;border-bottom:1px solid var(--gray-200);padding:1.2rem 1.5rem;position:sticky;top:112px;z-index:100;}
+.search-filters{max-width:1200px;margin:0 auto;display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+.filter-select{padding:8px 12px;border:1.5px solid var(--gray-200);border-radius:var(--r);font-size:13px;background:#fff;color:var(--ink);cursor:pointer;}
+.filter-select:focus{outline:none;border-color:var(--accent);}
+.price-range{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--gray-500);}
+.price-range input{width:80px;padding:7px 10px;border:1.5px solid var(--gray-200);border-radius:var(--r);font-size:13px;}
+.price-range input:focus{outline:none;border-color:var(--accent);}
+.results-count{font-size:13px;color:var(--gray-500);margin-left:auto;}
+.sort-select{padding:8px 12px;border:1.5px solid var(--gray-200);border-radius:var(--r);font-size:13px;cursor:pointer;}
+
+/*  DETAIL MODAL  */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:500;justify-content:center;align-items:center;padding:1rem;}
+.modal-overlay.open{display:flex;}
+.modal{background:#fff;border-radius:var(--r-lg);max-width:700px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:var(--sh-lg);}
+.modal-header{padding:1.2rem 1.5rem;border-bottom:1px solid var(--gray-200);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:#fff;z-index:1;}
+.modal-header h3{font-size:17px;font-weight:700;}
+.modal-close{background:var(--gray-100);border:none;width:32px;height:32px;border-radius:50%;font-size:18px;color:var(--gray-500);cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.modal-close:hover{background:var(--gray-200);}
+.modal-body{padding:1.5rem;}
+
+/* Detail layout */
+.detail-grid{display:grid;grid-template-columns:200px 1fr;gap:1.5rem;}
+.detail-cover{height:280px;border-radius:var(--r);overflow:hidden;background:linear-gradient(135deg,#dbeafe,#e0e7ff);}
+.detail-cover img{width:100%;height:100%;object-fit:cover;}
+.detail-cover-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:6rem;}
+.detail-info{}
+.detail-price{font-size:2rem;font-weight:800;color:var(--accent);margin-bottom:8px;}
+.detail-badges{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+.detail-table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px;}
+.detail-table td{padding:6px 0;vertical-align:top;}
+.detail-table td:first-child{color:var(--gray-400);width:90px;}
+.detail-table td:last-child{font-weight:500;}
+.detail-seller{background:var(--paper);border-radius:var(--r);padding:12px 14px;margin-bottom:12px;}
+.detail-seller-name{font-weight:700;font-size:14px;}
+.detail-seller-meta{font-size:12px;color:var(--gray-500);margin-top:2px;}
+.detail-actions{display:flex;gap:10px;flex-wrap:wrap;}
+.detail-actions .btn{flex:1;justify-content:center;}
+.detail-desc{font-size:14px;color:var(--gray-600);line-height:1.7;margin-bottom:12px;}
+
+/*  FORMS  */
+.form-group{margin-bottom:1rem;}
+.form-group label{display:block;font-size:13px;font-weight:600;color:var(--gray-600);margin-bottom:5px;}
+.form-group input,.form-group select,.form-group textarea{
+  width:100%;padding:10px 14px;border:1.5px solid var(--gray-200);border-radius:var(--r);
+  font-size:14px;font-family:inherit;transition:var(--transition);background:#fff;color:var(--ink);}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(233,69,96,0.1);}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.form-error{color:var(--accent);font-size:12px;margin-top:4px;}
+.form-hint{color:var(--gray-400);font-size:12px;margin-top:4px;}
+.form-divider{text-align:center;color:var(--gray-400);font-size:13px;margin:1.2rem 0;position:relative;}
+.form-divider::before,.form-divider::after{content:'';position:absolute;top:50%;width:42%;height:1px;background:var(--gray-200);}
+.form-divider::before{left:0;}.form-divider::after{right:0;}
+
+/*  AUTH MODAL  */
+.auth-modal{max-width:440px;}
+.auth-logo{text-align:center;padding:2rem 1.5rem 1rem;border-bottom:1px solid var(--gray-100);}
+.auth-logo .logo-big{font-size:2rem;font-weight:800;color:var(--brand);}
+.auth-logo .logo-big em{color:var(--accent);font-style:normal;}
+.auth-logo p{font-size:13px;color:var(--gray-500);margin-top:4px;}
+
+/*  PROFILE PAGE  */
+.profile-hero{background:linear-gradient(135deg,var(--brand),var(--ink-light));color:#fff;padding:2.5rem 1.5rem;}
+.profile-hero-inner{max-width:1200px;margin:0 auto;display:flex;gap:1.5rem;align-items:center;flex-wrap:wrap;}
+.profile-avatar{width:90px;height:90px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:800;border:3px solid rgba(255,255,255,0.3);flex-shrink:0;}
+.profile-details h2{font-size:1.6rem;font-weight:800;}
+.profile-details p{opacity:0.75;font-size:14px;margin-top:4px;}
+.profile-trust{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.15);border-radius:20px;padding:4px 14px;font-size:13px;font-weight:600;margin-top:8px;}
+.profile-trust .trust-score{color:var(--gold);}
+
+.profile-tabs{background:#fff;border-bottom:1px solid var(--gray-200);}
+.profile-tabs-inner{max-width:1200px;margin:0 auto;display:flex;gap:0;}
+.ptab{padding:14px 20px;font-size:14px;font-weight:500;color:var(--gray-500);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;transition:var(--transition);}
+.ptab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.ptab:hover:not(.active){color:var(--ink);}
+
+.profile-content{max-width:1200px;margin:0 auto;padding:2rem 1.5rem;}
+.profile-grid{display:grid;grid-template-columns:280px 1fr;gap:2rem;}
+.profile-card{background:#fff;border-radius:var(--r-lg);border:1px solid var(--gray-200);padding:1.5rem;margin-bottom:1rem;}
+.profile-card h3{font-size:14px;font-weight:700;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:1rem;}
+.info-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-100);font-size:14px;}
+.info-row:last-child{border-bottom:none;}
+.info-row .label{color:var(--gray-400);}
+.info-row .value{font-weight:600;}
+
+/*  WISHLIST  */
+.wishlist-item{background:#fff;border:1px solid var(--gray-200);border-radius:var(--r-lg);padding:14px 16px;display:flex;gap:16px;align-items:flex-start;transition:var(--transition);}
+.wishlist-item:hover{box-shadow:var(--sh);}
+.wishlist-thumb{width:60px;height:80px;border-radius:var(--r);overflow:hidden;background:linear-gradient(135deg,var(--sky),#e0e7ff);flex-shrink:0;}
+.wishlist-thumb img{width:100%;height:100%;object-fit:cover;}
+.wishlist-thumb-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:2rem;}
+.wishlist-info{flex:1;}
+.wishlist-title{font-size:14px;font-weight:700;color:var(--ink);margin-bottom:2px;}
+.wishlist-author{font-size:12px;color:var(--gray-400);margin-bottom:8px;}
+.wishlist-avail{font-size:12px;padding:3px 10px;border-radius:20px;font-weight:600;display:inline-block;}
+.avail-yes{background:var(--green-light);color:var(--green);}
+.avail-no{background:var(--gray-100);color:var(--gray-400);}
+.wishlist-remove{background:none;border:none;color:var(--gray-300);font-size:20px;cursor:pointer;flex-shrink:0;transition:var(--transition);}
+.wishlist-remove:hover{color:var(--accent);}
+
+/*  CHAT  */
+.chat-layout{display:grid;grid-template-columns:300px 1fr;height:calc(100vh - 130px);min-height:500px;background:#fff;border-radius:var(--r-lg);border:1px solid var(--gray-200);overflow:hidden;}
+.chat-sidebar{border-right:1px solid var(--gray-200);display:flex;flex-direction:column;}
+.chat-sidebar-header{padding:1rem 1.2rem;border-bottom:1px solid var(--gray-200);font-weight:700;font-size:15px;display:flex;justify-content:space-between;align-items:center;}
+.chat-rooms{flex:1;overflow-y:auto;}
+.chat-room{padding:12px 1rem;border-bottom:1px solid var(--gray-100);cursor:pointer;transition:var(--transition);display:flex;gap:10px;align-items:flex-start;}
+.chat-room:hover,.chat-room.active{background:var(--sky);}
+.chat-room-icon{width:40px;height:40px;border-radius:var(--r);background:linear-gradient(135deg,var(--sky),#e0e7ff);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.chat-room-info{flex:1;min-width:0;}
+.chat-room-title{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.chat-room-sub{font-size:11px;color:var(--gray-400);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.chat-room-badge{background:var(--accent);color:#fff;font-size:10px;font-weight:700;min-width:18px;height:18px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 4px;flex-shrink:0;}
+.chat-main{display:flex;flex-direction:column;}
+.chat-header{padding:1rem 1.2rem;border-bottom:1px solid var(--gray-200);font-weight:700;display:flex;align-items:center;gap:10px;}
+.chat-typing{font-size:12px;color:var(--gray-400);font-weight:400;font-style:italic;}
+.messages-area{flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:10px;background:var(--paper);}
+.msg{max-width:68%;padding:10px 14px;border-radius:12px;font-size:14px;line-height:1.5;}
+.msg-mine{background:var(--brand);color:#fff;align-self:flex-end;border-bottom-right-radius:4px;}
+.msg-other{background:#fff;color:var(--ink);align-self:flex-start;border-bottom-left-radius:4px;border:1px solid var(--gray-200);}
+.msg-sender{font-size:11px;font-weight:600;opacity:0.7;margin-bottom:3px;}
+.msg-time{font-size:10px;opacity:0.6;margin-top:4px;text-align:right;}
+.chat-input-area{padding:1rem;border-top:1px solid var(--gray-200);display:flex;gap:10px;align-items:flex-end;}
+.chat-input-area textarea{flex:1;padding:10px 14px;border:1.5px solid var(--gray-200);border-radius:20px;font-size:14px;resize:none;max-height:100px;min-height:44px;font-family:inherit;transition:var(--transition);}
+.chat-input-area textarea:focus{outline:none;border-color:var(--accent);}
+.chat-send-btn{background:var(--accent);color:#fff;border:none;width:44px;height:44px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:var(--transition);}
+.chat-send-btn:hover{background:var(--accent-dim);transform:scale(1.05);}
+.chat-empty{flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;color:var(--gray-400);}
+.chat-empty .chat-empty-icon{font-size:3rem;}
+
+/*  NOTIFICATIONS PANEL  */
+.notif-panel{position:fixed;top:70px;right:1rem;background:#fff;border-radius:var(--r-lg);border:1px solid var(--gray-200);box-shadow:var(--sh-lg);width:340px;z-index:400;display:none;max-height:500px;overflow-y:auto;}
+.notif-panel.open{display:block;}
+.notif-header{padding:1rem 1.2rem;border-bottom:1px solid var(--gray-200);display:flex;justify-content:space-between;align-items:center;font-weight:700;}
+.notif-item{padding:12px 1.2rem;border-bottom:1px solid var(--gray-100);font-size:13px;cursor:pointer;transition:var(--transition);}
+.notif-item:hover{background:var(--paper);}
+.notif-item.unread{background:var(--sky);}
+.notif-type{font-size:11px;color:var(--gray-400);margin-top:3px;}
+.notif-empty{padding:2rem;text-align:center;color:var(--gray-400);}
+
+/*  BOOK REQUESTS PAGE  */
+.request-card{background:#fff;border:1px solid var(--gray-200);border-radius:var(--r-lg);padding:16px;transition:var(--transition);}
+.request-card:hover{box-shadow:var(--sh);}
+.request-title{font-size:14px;font-weight:700;color:var(--ink);margin-bottom:4px;}
+.request-meta{font-size:12px;color:var(--gray-400);margin-bottom:8px;}
+.request-budget{font-size:13px;color:var(--green);font-weight:600;}
+.request-requester{font-size:12px;color:var(--gray-500);margin-top:8px;display:flex;align-items:center;gap:6px;}
+
+/*  READING GOALS  */
+.goal-card{background:#fff;border:1px solid var(--gray-200);border-radius:var(--r-lg);padding:16px;transition:var(--transition);}
+.goal-card:hover{box-shadow:var(--sh);}
+.goal-title{font-size:14px;font-weight:700;margin-bottom:4px;}
+.goal-date{font-size:12px;color:var(--gray-400);}
+.goal-status{display:inline-flex;align-items:center;gap:4px;font-size:12px;padding:3px 10px;border-radius:20px;font-weight:600;margin-top:8px;}
+.status-in_progress{background:var(--gold-light);color:var(--gold);}
+.status-completed{background:var(--green-light);color:var(--green);}
+.status-abandoned{background:var(--gray-100);color:var(--gray-400);}
+
+/*  REVIEWS SECTION  */
+.review-card{padding:14px 0;border-bottom:1px solid var(--gray-200);}
+.review-card:last-child{border-bottom:none;}
+.review-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;}
+.reviewer-name{font-size:13px;font-weight:700;}
+.review-score{display:flex;gap:1px;}
+.review-score span{color:var(--gold);}
+.review-text{font-size:13px;color:var(--gray-600);line-height:1.6;}
+.review-date{font-size:11px;color:var(--gray-400);margin-top:4px;}
+
+/*  FEATURED BANNER  */
+.feature-banner{border-radius:var(--r-lg);overflow:hidden;display:grid;grid-template-columns:1fr 1fr;min-height:160px;}
+.feature-banner-left{padding:1.8rem 2rem;background:linear-gradient(135deg,var(--brand),#0f3460);color:#fff;}
+.feature-banner-left h3{font-size:1.3rem;font-weight:800;margin-bottom:8px;}
+.feature-banner-left p{font-size:13px;opacity:0.8;margin-bottom:1rem;}
+.feature-banner-right{background:linear-gradient(135deg,var(--accent),#c73652);padding:1.8rem 2rem;color:#fff;}
+.feature-banner-right h3{font-size:1.3rem;font-weight:800;margin-bottom:8px;}
+.feature-banner-right p{font-size:13px;opacity:0.8;margin-bottom:1rem;}
+
+/*  EMPTY STATE  */
+.empty-state{text-align:center;padding:4rem 1rem;color:var(--gray-400);}
+.empty-state .empty-icon{font-size:4rem;margin-bottom:1rem;}
+.empty-state h3{font-size:1rem;font-weight:700;color:var(--gray-600);margin-bottom:6px;}
+.empty-state p{font-size:13px;max-width:280px;margin:0 auto;}
+
+/*  TOAST  */
+.toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--ink);color:#fff;padding:12px 20px;border-radius:var(--r);font-size:14px;z-index:9999;transform:translateY(80px);opacity:0;transition:all 0.3s cubic-bezier(0.4,0,0.2,1);max-width:320px;display:flex;align-items:center;gap:8px;box-shadow:var(--sh-lg);}
+.toast.show{transform:translateY(0);opacity:1;}
+.toast.success{background:var(--green);}
+.toast.error{background:var(--accent);}
+.toast.info{background:var(--teal);}
+
+/*  LOADING  */
+.loading-state{text-align:center;padding:3rem;color:var(--gray-400);}
+.spinner{width:32px;height:32px;border:3px solid var(--gray-200);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 10px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/*  FEATURE PILLS  */
+.feature-pills{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:2rem;}
+.feature-pill{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--gray-200);border-radius:var(--r-lg);padding:12px 16px;font-size:13px;color:var(--gray-600);flex:1;min-width:180px;}
+.feature-pill .pill-icon{font-size:1.4rem;flex-shrink:0;}
+.feature-pill strong{display:block;color:var(--ink);font-size:14px;}
+
+/*  TAG/CHIP  */
+.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;}
+.chip-green{background:var(--green-light);color:var(--green);}
+.chip-gold{background:var(--gold-light);color:var(--gold);}
+.chip-purple{background:#f3e8ff;color:#7c3aed;}
+.chip-teal{background:#e0f7fa;color:var(--teal);}
+.chip-red{background:#fee2e2;color:#dc2626;}
+
+/*  PRICE ALERT BOX  */
+.alert-box{background:var(--gold-light);border:1px solid #f5c76e;border-radius:var(--r);padding:12px 14px;font-size:13px;margin-top:8px;}
+.alert-box .alert-title{font-weight:700;color:var(--gold);margin-bottom:6px;display:flex;align-items:center;gap:6px;}
+.alert-input-row{display:flex;gap:8px;align-items:center;}
+.alert-input-row input{flex:1;padding:7px 10px;border:1px solid #f5c76e;border-radius:var(--r);font-size:13px;}
+.alert-input-row input:focus{outline:none;border-color:var(--gold);}
+
+/*  RESPONSIVE  */
+@media(max-width:768px){
+  .nav-bottom{display:none;}
+  .hero-content{padding:2rem 1.5rem;}
+  .hero-content h1{font-size:1.8rem;}
+  .detail-grid{grid-template-columns:1fr;}
+  .form-grid{grid-template-columns:1fr;}
+  .chat-layout{grid-template-columns:1fr;height:auto;}
+  .feature-banner{grid-template-columns:1fr;}
+  .profile-grid{grid-template-columns:1fr;}
+  .hcarousel-prev,.hcarousel-next{display:none;}
+}
+@media(max-width:480px){
+  .nav-search{display:none;}
+  .hero-section{height:auto;}
+  .stats-inner{flex-wrap:wrap;gap:1rem;}
+}
+</style>
+</head>
+<body>
+
+<!-- PROMO BAR -->
+<div class="promo-bar">
+   Campus Book Marketplace - <span></span> Save up to 80% on textbooks <span></span> Free exchanges & donations available!
+</div>
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <div class="nav-top">
+    <div class="nav-logo" onclick="showPage('home')" style="cursor:pointer">
+      <div class="logo-icon"></div>
+      <div>
+        <div class="logo-text">BookExchange</div>
+        <div class="logo-sub">Campus Marketplace</div>
+      </div>
+    </div>
+    <div class="nav-search">
+      <span class="search-icon-nav"></span>
+      <input type="text" id="navSearchInput" placeholder="Search books, authors, subjects" onkeydown="if(event.key==='Enter') doSearch()">
+      <button class="search-btn" onclick="doSearch()">Search</button>
+    </div>
+    <div class="nav-actions">
+      <button class="nav-icon-btn" onclick="toggleNotifications()" id="notifBtn" title="Notifications">
+        <span class="badge-count" id="notifCount" style="display:none">0</span>
+      </button>
+      <button class="nav-icon-btn" onclick="requireAuth(()=>showPage('wishlist'))" title="Wishlist" id="wishBtn" style="display:none"></button>
+      <button class="nav-icon-btn" onclick="requireAuth(()=>showPage('chat'))" title="Messages" id="msgBtn" style="display:none">
+        <span class="badge-count" id="msgCount" style="display:none">0</span>
+      </button>
+      <div id="authButtons" style="display:flex;gap:8px;">
+        <button class="btn btn-ghost btn-sm" onclick="openModal('loginModal')" style="color:#fff;border-color:rgba(255,255,255,0.3);">Sign in</button>
+        <button class="btn btn-primary btn-sm" onclick="openModal('registerModal')">Register</button>
+      </div>
+      <div id="userMenu" style="display:none;">
+        <button class="nav-user-btn" onclick="showPage('profile')">
+          <div class="nav-user-avatar" id="navUserAvatar">?</div>
+          <span id="navUserName">User</span>
+        </button>
+      </div>
+    </div>
+  </div>
+  <div class="nav-bottom">
+    <div class="nav-links">
+      <div class="nav-link active" onclick="showPage('home')"> Home</div>
+      <div class="nav-link" onclick="showSearch()"> Browse All</div>
+      <div class="nav-link" onclick="showSearchByCategory('CSE')"> CSE Books</div>
+      <div class="nav-link" onclick="showSearchByCategory('ECE')"> ECE Books</div>
+      <div class="nav-link" onclick="showSearchByCategory('MECH')"> MECH Books</div>
+      <div class="nav-link" onclick="showSearchByCategory('CIVIL')"> CIVIL Books</div>
+      <div class="nav-link" onclick="showSearchByType('donation')"> Free Books</div>
+      <div class="nav-link" onclick="showSearchByType('exchange')"> Exchange</div>
+      <div class="nav-link" onclick="showPage('requests')"> Book Requests</div>
+    </div>
+  </div>
+</nav>
+
+<!-- NOTIFICATIONS PANEL -->
+<div class="notif-panel" id="notifPanel">
+  <div class="notif-header">
+    <span>Notifications</span>
+    <button class="btn btn-ghost btn-sm" onclick="markAllRead()">Mark all read</button>
+  </div>
+  <div id="notifList"><div class="notif-empty">No notifications yet</div></div>
+</div>
+
+<!--  HOME PAGE  -->
+<div id="page-home" class="page active">
+
+  <!-- HERO CAROUSEL -->
+  <div class="hero-section">
+    <div class="hero-slides" id="heroSlides">
+      <div class="hero-slide hero-slide-0">
+        <div class="hero-content">
+          <div class="hero-eyebrow"> Vardhaman College of Engineering</div>
+          <h1>Your campus<br><em>bookshelf</em>, reimagined.</h1>
+          <p>Buy, sell, exchange & donate textbooks with fellow students. Save money, help juniors, build community.</p>
+          <div class="hero-btns">
+            <button class="btn btn-primary btn-lg" onclick="showSearch()">Browse Books</button>
+            <button class="btn" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.4);" onclick="requireAuth(()=>openModal('postListingModal'))">+ Sell a Book</button>
+          </div>
+        </div>
+        <div class="hero-deco"><div class="hero-deco-books"></div></div>
+      </div>
+      <div class="hero-slide hero-slide-1">
+        <div class="hero-content">
+          <div class="hero-eyebrow"> BOOK EXCHANGE</div>
+          <h1>Got books<br>you don't need? <em>Exchange!</em></h1>
+          <p>Trade your books directly with other students. No money needed  just swap your old for what you need.</p>
+          <div class="hero-btns">
+            <button class="btn btn-primary btn-lg" onclick="showSearchByType('exchange')">View Exchanges</button>
+            <button class="btn" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.4);" onclick="requireAuth(()=>openModal('requestModal'))">Request a Book</button>
+          </div>
+        </div>
+        <div class="hero-deco"><div class="hero-deco-books"></div></div>
+      </div>
+      <div class="hero-slide hero-slide-2">
+        <div class="hero-content">
+          <div class="hero-eyebrow"> DONATE & PAY IT FORWARD</div>
+          <h1>Help juniors <em>succeed</em>  donate your books.</h1>
+          <p>Passed your semester? Donate your textbooks to junior students who need them most.</p>
+          <div class="hero-btns">
+            <button class="btn btn-primary btn-lg" onclick="showSearchByType('donation')">Free Books</button>
+            <button class="btn" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.4);" onclick="requireAuth(()=>openModal('postListingModal'))">Donate a Book</button>
+          </div>
+        </div>
+        <div class="hero-deco"><div class="hero-deco-books"></div></div>
+      </div>
+    </div>
+    <button class="hero-nav hero-prev" onclick="slideHero(-1)"></button>
+    <button class="hero-nav hero-next" onclick="slideHero(1)"></button>
+    <div class="hero-indicators">
+      <div class="hero-dot active" onclick="goSlide(0)"></div>
+      <div class="hero-dot" onclick="goSlide(1)"></div>
+      <div class="hero-dot" onclick="goSlide(2)"></div>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-strip">
+    <div class="stats-inner">
+      <div class="stat-item"><span class="stat-num" id="statListings"></span><span class="stat-lbl">Active Listings</span></div>
+      <div class="stat-item"><span class="stat-num" id="statStudents"></span><span class="stat-lbl">Students</span></div>
+      <div class="stat-item"><span class="stat-num" id="statBooks"></span><span class="stat-lbl">Book Titles</span></div>
+      <div class="stat-item"><span class="stat-num" id="statSaved">0</span><span class="stat-lbl">Est. Savings</span></div>
+    </div>
+  </div>
+
+  <!-- CATEGORY CHIPS -->
+  <div class="categories-bar">
+    <div class="categories-inner">
+      <div class="cat-chip active" onclick="filterByChip('',this)">All Books</div>
+      <div class="cat-chip" onclick="filterByChip('CSE',this)"> CSE</div>
+      <div class="cat-chip" onclick="filterByChip('ECE',this)"> ECE</div>
+      <div class="cat-chip" onclick="filterByChip('MECH',this)"> MECH</div>
+      <div class="cat-chip" onclick="filterByChip('CIVIL',this)"> CIVIL</div>
+      <div class="cat-chip" onclick="filterByChip('EEE',this)"> EEE</div>
+      <div class="cat-chip" onclick="filterByChipType('donation',this)"> Free</div>
+      <div class="cat-chip" onclick="filterByChipType('exchange',this)"> Exchange</div>
+    </div>
+  </div>
+
+  <!-- FEATURE PILLS -->
+  <div class="section" style="padding-bottom:0;">
+    <div class="section-inner">
+      <div class="feature-pills">
+        <div class="feature-pill"><div class="pill-icon"></div><div><strong>Save up to 80%</strong>Buy from students, not bookstores</div></div>
+        <div class="feature-pill"><div class="pill-icon"></div><div><strong>Direct Exchange</strong>Trade books with other students</div></div>
+        <div class="feature-pill"><div class="pill-icon"></div><div><strong>Chat with Sellers</strong>Negotiate and coordinate pickup</div></div>
+        <div class="feature-pill"><div class="pill-icon"></div><div><strong>Trust Scores</strong>Rate and review every transaction</div></div>
+        <div class="feature-pill"><div class="pill-icon"></div><div><strong>Price Alerts</strong>Get notified when prices drop</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RECOMMENDED STRIP (logged in users) -->
+  <div id="recommendSection" style="display:none;" class="section" style="padding-bottom:0;">
+    <div class="section-inner">
+      <div style="background:linear-gradient(135deg,var(--green-light),var(--sky));border-radius:var(--r-lg);padding:1.2rem 1.5rem;">
+        <div class="section-header" style="margin-bottom:1rem;">
+          <div class="section-title"> Recommended for You</div>
+          <a class="section-link" onclick="showSearch()">See all </a>
+        </div>
+        <div class="hcarousel-wrap">
+          <button class="hcarousel-prev" onclick="scrollCarousel('recCarousel',-1)"></button>
+          <div class="hcarousel" id="recCarousel"></div>
+          <button class="hcarousel-next" onclick="scrollCarousel('recCarousel',1)"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TRENDING BOOKS -->
+  <div class="section">
+    <div class="section-inner">
+      <div class="section-header">
+        <div class="section-title"> <em>Trending</em> This Semester</div>
+        <a class="section-link" onclick="showSearch()">View all </a>
+      </div>
+      <div class="hcarousel-wrap">
+        <button class="hcarousel-prev" onclick="scrollCarousel('trendingCarousel',-1)"></button>
+        <div class="hcarousel" id="trendingCarousel">
+          <div class="loading-state"><div class="spinner"></div></div>
+        </div>
+        <button class="hcarousel-next" onclick="scrollCarousel('trendingCarousel',1)"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FEATURE BANNER -->
+  <div class="section" style="padding-top:0;">
+    <div class="section-inner">
+      <div class="feature-banner">
+        <div class="feature-banner-left">
+          <h3> Can't find your book?</h3>
+          <p>Post a Book Request  sellers will reach out to you directly!</p>
+          <button class="btn" style="background:rgba(255,255,255,0.2);color:#fff;border:1px solid rgba(255,255,255,0.4);" onclick="requireAuth(()=>openModal('requestModal'))">Post Request </button>
+        </div>
+        <div class="feature-banner-right">
+          <h3> Set Price Alerts</h3>
+          <p>Watch any book and get notified when the price drops to your budget!</p>
+          <button class="btn" style="background:rgba(255,255,255,0.2);color:#fff;border:1px solid rgba(255,255,255,0.4);" onclick="requireAuth(()=>showPage('wishlist'))">My Watchlist </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LATEST LISTINGS -->
+  <div class="section" style="padding-top:0;">
+    <div class="section-inner">
+      <div class="section-header">
+        <div class="section-title"> Latest <em>Listings</em></div>
+        <a class="section-link" onclick="showSearch()">Browse all </a>
+      </div>
+      <div id="latestListings" class="listing-grid">
+        <div class="loading-state" style="grid-column:1/-1"><div class="spinner"></div>Loading listings...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HOW IT WORKS -->
+  <div class="section" style="background:#fff;border-top:1px solid var(--gray-200);border-bottom:1px solid var(--gray-200);">
+    <div class="section-inner">
+      <div class="section-header"><div class="section-title">How <em>BookExchange</em> Works</div></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1.5rem;text-align:center;">
+        <div><div style="font-size:3rem;margin-bottom:12px;"></div><h4 style="font-size:15px;margin-bottom:6px;">1. Find or List</h4><p style="font-size:13px;color:var(--gray-500);">Browse thousands of listings or post your book in seconds.</p></div>
+        <div><div style="font-size:3rem;margin-bottom:12px;"></div><h4 style="font-size:15px;margin-bottom:6px;">2. Chat & Negotiate</h4><p style="font-size:13px;color:var(--gray-500);">Message sellers directly to negotiate price and arrange pickup.</p></div>
+        <div><div style="font-size:3rem;margin-bottom:12px;"></div><h4 style="font-size:15px;margin-bottom:6px;">3. Meet & Exchange</h4><p style="font-size:13px;color:var(--gray-500);">Meet on campus, complete the transaction safely and easily.</p></div>
+        <div><div style="font-size:3rem;margin-bottom:12px;"></div><h4 style="font-size:15px;margin-bottom:6px;">4. Rate & Review</h4><p style="font-size:13px;color:var(--gray-500);">Build your trust score by rating every successful exchange.</p></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /page-home -->
+
+<!--  SEARCH/BROWSE PAGE  -->
+<div id="page-search" class="page">
+  <div class="search-page-header">
+    <div class="search-filters">
+      <select class="filter-select" id="filterBranch" onchange="loadSearchListings()">
+        <option value="">All Branches</option>
+        <option>CSE</option><option>ECE</option><option>MECH</option><option>CIVIL</option><option>EEE</option>
+      </select>
+      <select class="filter-select" id="filterCondition" onchange="loadSearchListings()">
+        <option value="">Any Condition</option>
+        <option>Good</option><option>Fair</option><option>Poor</option>
+      </select>
+      <select class="filter-select" id="filterType" onchange="loadSearchListings()">
+        <option value="">All Types</option>
+        <option value="sale">For Sale</option>
+        <option value="exchange">Exchange</option>
+        <option value="donation">Free / Donate</option>
+      </select>
+      <select class="filter-select" id="filterSemester" onchange="loadSearchListings()">
+        <option value="">Any Semester</option>
+        <option value="1">Sem 1</option><option value="2">Sem 2</option><option value="3">Sem 3</option>
+        <option value="4">Sem 4</option><option value="5">Sem 5</option><option value="6">Sem 6</option>
+        <option value="7">Sem 7</option><option value="8">Sem 8</option>
+      </select>
+      <div class="price-range">
+        <input type="number" id="minPrice" placeholder="Min" oninput="loadSearchListings()" min="0">
+        
+        <input type="number" id="maxPrice" placeholder="Max" oninput="loadSearchListings()" min="0">
+      </div>
+      <select class="sort-select" id="sortBy" onchange="loadSearchListings()">
+        <option value="">Sort: Latest</option>
+        <option value="price_asc">Price: Low to High</option>
+        <option value="price_desc">Price: High to Low</option>
+        <option value="rating">Seller Rating</option>
+      </select>
+      <div class="results-count" id="searchCount"></div>
+      <button class="btn btn-primary btn-sm" onclick="requireAuth(()=>openModal('postListingModal'))">+ Post Book</button>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-inner">
+      <div class="section-header" style="margin-bottom:1rem;">
+        <h2 id="searchHeading" style="font-size:1.1rem;font-weight:700;">All Listings</h2>
+      </div>
+      <div id="searchGrid" class="listing-grid">
+        <div class="loading-state" style="grid-column:1/-1"><div class="spinner"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!--  WISHLIST PAGE  -->
+<div id="page-wishlist" class="page">
+  <div class="section">
+    <div class="section-inner">
+      <div class="section-header">
+        <div class="section-title"> My Wishlist</div>
+        <button class="btn btn-primary btn-sm" onclick="openModal('priceAlertModal')"> Set Price Alert</button>
+      </div>
+      <div id="wishlistContent" style="display:flex;flex-direction:column;gap:12px;">
+        <div class="loading-state"><div class="spinner"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!--  CHAT PAGE  -->
+<div id="page-chat" class="page">
+  <div class="section" style="padding-top:1rem;">
+    <div class="section-inner">
+      <div class="chat-layout" id="chatLayout">
+        <div class="chat-sidebar">
+          <div class="chat-sidebar-header">
+            <span> Messages</span>
+          </div>
+          <div class="chat-rooms" id="chatRoomsList">
+            <div class="loading-state"><div class="spinner"></div></div>
+          </div>
+        </div>
+        <div class="chat-main" id="chatMain">
+          <div class="chat-empty">
+            <div class="chat-empty-icon"></div>
+            <h3 style="color:var(--gray-600);">Select a conversation</h3>
+            <p style="font-size:13px;">Choose a conversation from the left to start chatting</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!--  PROFILE PAGE  -->
+<div id="page-profile" class="page">
+  <div class="profile-hero">
+    <div class="profile-hero-inner">
+      <div class="profile-avatar" id="profileAvatar">?</div>
+      <div class="profile-details">
+        <h2 id="profileName">Loading</h2>
+        <p id="profileMeta"></p>
+        <div class="profile-trust">
+          <span></span><span class="trust-score" id="profileTrust"></span>
+          <span style="opacity:0.6;font-size:11px;">trust score</span>
+          <span style="opacity:0.6;"></span>
+          <span id="profileRatings" style="opacity:0.8;">0 ratings</span>
+        </div>
+      </div>
+      <div style="margin-left:auto;display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="openModal('postListingModal')">+ Post a Book</button>
+        <button class="btn" style="background:rgba(255,255,255,0.2);color:#fff;border:1px solid rgba(255,255,255,0.3);" onclick="openModal('editProfileModal')">Edit Profile</button>
+      </div>
+    </div>
+  </div>
+  <div class="profile-tabs">
+    <div class="profile-tabs-inner">
+      <div class="ptab active" onclick="switchProfileTab(this,'pMyListings')">My Listings</div>
+      <div class="ptab" onclick="switchProfileTab(this,'pRatings')">Ratings & Reviews</div>
+      <div class="ptab" onclick="switchProfileTab(this,'pReadingGoals')">Reading Goals</div>
+    </div>
+  </div>
+  <div class="profile-content">
+    <div id="pMyListings">
+      <div id="profileListings" class="listing-grid">
+        <div class="loading-state" style="grid-column:1/-1"><div class="spinner"></div></div>
+      </div>
+    </div>
+    <div id="pRatings" style="display:none;">
+      <div id="profileRatingsList" style="background:#fff;border-radius:var(--r-lg);border:1px solid var(--gray-200);padding:1.5rem;"></div>
+    </div>
+    <div id="pReadingGoals" style="display:none;">
+      <div style="margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;">
+        <h3 style="font-size:15px;font-weight:700;">My Reading Goals</h3>
+        <button class="btn btn-primary btn-sm" onclick="openModal('goalModal')">+ Add Goal</button>
+      </div>
+      <div id="goalsList" style="display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));"></div>
+    </div>
+  </div>
+</div>
+
+<!--  BOOK REQUESTS PAGE  -->
+<div id="page-requests" class="page">
+  <div class="section">
+    <div class="section-inner">
+      <div class="section-header">
+        <div class="section-title"> Book <em>Requests</em></div>
+        <button class="btn btn-primary btn-sm" onclick="requireAuth(()=>openModal('requestModal'))">+ Post Request</button>
+      </div>
+      <p style="font-size:13px;color:var(--gray-500);margin-bottom:1.5rem;">Students looking for specific books. If you have it, reach out to them!</p>
+      <div id="requestsList" style="display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));">
+        <div class="loading-state" style="grid-column:1/-1"><div class="spinner"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!--  MODALS  -->
+
+<!-- LISTING DETAIL MODAL -->
+<div class="modal-overlay" id="listingModal">
+  <div class="modal" style="max-width:740px;">
+    <div class="modal-header">
+      <h3 id="listingModalTitle">Book Details</h3>
+      <button class="modal-close" onclick="closeModal('listingModal')"></button>
+    </div>
+    <div class="modal-body" id="listingModalBody">
+      <div class="loading-state"><div class="spinner"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- POST LISTING MODAL -->
+<div class="modal-overlay" id="postListingModal">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <h3> Post a Book</h3>
+      <button class="modal-close" onclick="closeModal('postListingModal')"></button>
+    </div>
+    <div class="modal-body">
+      <form id="postListingForm" onsubmit="return false;">
+        <div class="form-group">
+          <label>Select Book from Catalog</label>
+          <select name="book_id" id="bookSelectDropdown">
+            <option value="">Loading books</option>
+          </select>
+        </div>
+        <p style="font-size:12px;color:var(--gray-400);margin:-6px 0 12px;">Book not listed? <a href="#" onclick="toggleAddBook()" style="color:var(--accent);font-weight:600;">Add it to the catalog </a></p>
+        <div id="addBookFields" style="display:none;background:var(--paper);border-radius:var(--r);padding:14px;margin-bottom:14px;border:1px solid var(--gray-200);">
+          <p style="font-size:12px;font-weight:700;color:var(--gray-600);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.05em;">Add New Book</p>
+          <div class="form-grid">
+            <div class="form-group"><label>Title *</label><input name="new_title" placeholder="Book title"></div>
+            <div class="form-group"><label>Author</label><input name="new_author" placeholder="Author name"></div>
+            <div class="form-group"><label>Subject</label><input name="new_subject" placeholder="e.g. DBMS"></div>
+            <div class="form-group"><label>ISBN</label><input name="new_isbn" placeholder="ISBN number"></div>
+            <div class="form-group"><label>Branch</label>
+              <select name="new_category"><option value="ALL">All Branches</option><option>CSE</option><option>ECE</option><option>MECH</option><option>CIVIL</option><option>EEE</option></select>
+            </div>
+            <div class="form-group"><label>Semester</label>
+              <select name="new_semester"><option value=""></option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select>
+            </div>
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="addBookToCatalog()">Add to Catalog</button>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Listing Type</label>
+            <select name="listing_type" id="listingTypeSelect" onchange="togglePriceField()">
+              <option value="sale">For Sale</option>
+              <option value="exchange">Exchange</option>
+              <option value="donation">Donate (Free)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Book Condition</label>
+            <select name="condition_label" required>
+              <option value="">Select condition</option>
+              <option value="Good">Good  Minor wear, all content intact</option>
+              <option value="Fair">Fair  Noticeable wear, some markings</option>
+              <option value="Poor">Poor  Heavy wear, still readable</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group" id="priceField">
+          <label>Price (Rs)</label>
+          <input name="price" type="number" min="0" placeholder="e.g. 250  leave blank for negotiable">
+        </div>
+        <div class="form-group" id="exchangeField" style="display:none;">
+          <label>Looking to exchange for</label>
+          <input name="preferred_exchange" placeholder="e.g. DBMS 6th edition, any MECH book">
+        </div>
+        <div class="form-group">
+          <label>Condition Notes</label>
+          <textarea name="description" rows="3" placeholder="Describe condition, edition, any damage, pages missing, highlighting"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Book Photo (optional)</label>
+          <input type="file" name="image" accept="image/*">
+          <div class="form-hint">Upload a photo to get 3 more views!</div>
+        </div>
+        <div id="postError" class="form-error"></div>
+      </form>
+    </div>
+    <div style="padding:1rem 1.5rem;border-top:1px solid var(--gray-200);display:flex;gap:10px;justify-content:flex-end;">
+      <button class="btn btn-ghost" onclick="closeModal('postListingModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitListing()">Post Listing</button>
+    </div>
+  </div>
+</div>
+
+<!-- LOGIN MODAL -->
+<div class="modal-overlay" id="loginModal">
+  <div class="modal auth-modal">
+    <div class="auth-logo">
+      <div class="logo-big">Book<em>Exchange</em></div>
+      <p>Sign in to buy, sell, and exchange books</p>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label>College Email</label><input type="email" id="loginEmail" placeholder="you@college.edu"></div>
+      <div class="form-group"><label>Password</label><input type="password" id="loginPassword" placeholder="Your password" onkeydown="if(event.key==='Enter') login()"></div>
+      <div id="loginError" class="form-error" style="margin-bottom:8px;"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;" onclick="login()">Sign In</button>
+      <div class="form-divider">or</div>
+      <p style="text-align:center;font-size:13px;color:var(--gray-500);">New to BookExchange? <a href="#" onclick="closeModal('loginModal');openModal('registerModal')" style="color:var(--accent);font-weight:600;">Create account</a></p>
+      <div style="background:var(--paper);border-radius:var(--r);padding:10px 14px;margin-top:1rem;font-size:12px;color:var(--gray-500);">
+         Demo accounts: <strong>arjun@vardhaman.ac.in</strong> / password: <strong>password123</strong>
+      </div>
+    </div>
+    <button class="modal-close" style="position:absolute;top:1rem;right:1rem;" onclick="closeModal('loginModal')"></button>
+  </div>
+</div>
+
+<!-- REGISTER MODAL -->
+<div class="modal-overlay" id="registerModal">
+  <div class="modal auth-modal">
+    <div class="auth-logo">
+      <div class="logo-big">Book<em>Exchange</em></div>
+      <p>Join thousands of students saving on textbooks</p>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group"><label>Full Name *</label><input type="text" id="regName" placeholder="Your full name"></div>
+        <div class="form-group"><label>College Email *</label><input type="email" id="regEmail" placeholder="you@college.edu"></div>
+        <div class="form-group"><label>Password *</label><input type="password" id="regPassword" placeholder="Min 6 characters"></div>
+        <div class="form-group"><label>Phone</label><input type="tel" id="regPhone" placeholder="10-digit mobile"></div>
+        <div class="form-group"><label>Branch</label>
+          <select id="regBranch"><option value="">Select branch</option><option>CSE</option><option>ECE</option><option>MECH</option><option>CIVIL</option><option>EEE</option></select>
+        </div>
+        <div class="form-group"><label>Year</label>
+          <select id="regYear"><option value="">Select year</option><option value="1">1st Year</option><option value="2">2nd Year</option><option value="3">3rd Year</option><option value="4">4th Year</option></select>
+        </div>
+      </div>
+      <div id="regError" class="form-error" style="margin-bottom:8px;"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;" onclick="register()">Create Account</button>
+      <div class="form-divider">or</div>
+      <p style="text-align:center;font-size:13px;color:var(--gray-500);">Already have an account? <a href="#" onclick="closeModal('registerModal');openModal('loginModal')" style="color:var(--accent);font-weight:600;">Sign in</a></p>
+    </div>
+    <button class="modal-close" style="position:absolute;top:1rem;right:1rem;" onclick="closeModal('registerModal')"></button>
+  </div>
+</div>
+
+<!-- BOOK REQUEST MODAL -->
+<div class="modal-overlay" id="requestModal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header"><h3> Post Book Request</h3><button class="modal-close" onclick="closeModal('requestModal')"></button></div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--gray-500);margin-bottom:1rem;">Tell the community which book you're looking for. Sellers will contact you!</p>
+      <div class="form-group"><label>Book Title *</label><input id="reqTitle" placeholder="e.g. Data Structures by Cormen"></div>
+      <div class="form-grid">
+        <div class="form-group"><label>Author</label><input id="reqAuthor" placeholder="Author name"></div>
+        <div class="form-group"><label>Subject</label><input id="reqSubject" placeholder="e.g. Algorithms"></div>
+      </div>
+      <div class="form-group"><label>Max Budget (Rs)</label><input id="reqBudget" type="number" placeholder="e.g. 300"></div>
+      <div class="form-group"><label>Additional Notes</label><textarea id="reqNotes" rows="2" placeholder="Edition, semester, branch info"></textarea></div>
+      <div id="reqError" class="form-error"></div>
+    </div>
+    <div style="padding:1rem 1.5rem;border-top:1px solid var(--gray-200);display:flex;gap:10px;justify-content:flex-end;">
+      <button class="btn btn-ghost" onclick="closeModal('requestModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitBookRequest()">Post Request</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT PROFILE MODAL -->
+<div class="modal-overlay" id="editProfileModal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header"><h3>Edit Profile</h3><button class="modal-close" onclick="closeModal('editProfileModal')"></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Full Name</label><input id="editName" placeholder="Your name"></div>
+      <div class="form-group"><label>Phone</label><input id="editPhone" placeholder="10-digit number"></div>
+      <div class="form-group"><label>Branch / Department</label>
+        <select id="editBranch"><option value="">Select</option><option>CSE</option><option>ECE</option><option>MECH</option><option>CIVIL</option><option>EEE</option></select>
+      </div>
+      <div class="form-group"><label>Bio</label><textarea id="editBio" rows="3" placeholder="Tell other students about yourself"></textarea></div>
+    </div>
+    <div style="padding:1rem 1.5rem;border-top:1px solid var(--gray-200);display:flex;gap:10px;justify-content:flex-end;">
+      <button class="btn btn-ghost" onclick="closeModal('editProfileModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveProfile()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- READING GOAL MODAL -->
+<div class="modal-overlay" id="goalModal">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-header"><h3> Add Reading Goal</h3><button class="modal-close" onclick="closeModal('goalModal')"></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Book Title</label><input id="goalTitle" placeholder="What book do you want to read?"></div>
+      <div class="form-group"><label>Target Completion Date</label><input id="goalDate" type="date"></div>
+      <div class="form-group"><label>Notes</label><textarea id="goalNotes" rows="2" placeholder="Why you want to read it, any notes"></textarea></div>
+    </div>
+    <div style="padding:1rem 1.5rem;border-top:1px solid var(--gray-200);display:flex;gap:10px;justify-content:flex-end;">
+      <button class="btn btn-ghost" onclick="closeModal('goalModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="addGoal()">Add Goal</button>
+    </div>
+  </div>
+</div>
+
+<!-- PRICE ALERT MODAL -->
+<div class="modal-overlay" id="priceAlertModal">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-header"><h3>Set Price Alert</h3><button class="modal-close" onclick="closeModal('priceAlertModal')">x</button></div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--gray-500);margin-bottom:1rem;">Select a book and set your target price. You can show this data in the Price_Alerts table.</p>
+      <div class="form-group"><label>Book</label><select id="alertBookSelect"><option value="">Select a book...</option></select></div>
+      <div class="form-group"><label>Target Price</label><input id="alertPrice" type="number" min="0" placeholder="e.g. 300"></div>
+      <div id="alertError" class="form-error"></div>
+    </div>
+    <div style="padding:1rem 1.5rem;border-top:1px solid var(--gray-200);display:flex;gap:10px;justify-content:flex-end;">
+      <button class="btn btn-ghost" onclick="closeModal('priceAlertModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="setPriceAlert()">Save Alert</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+const API_BASE = location.origin.includes('5000') ? '' : 'http://localhost:5000';
+let token = localStorage.getItem('bookexchange_token') || '';
+let currentUser = JSON.parse(localStorage.getItem('bookexchange_user') || 'null');
+let currentSearch = '';
+let currentRoomId = null;
+let socket = null;
+let heroIndex = 0;
+
+const $ = id => document.getElementById(id);
+const money = value => value === null || value === undefined || value === '' || Number(value) === 0 ? 'Free' : 'Rs ' + Number(value).toLocaleString('en-IN');
+const esc = value => String(value ?? '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));
+const authHeaders = () => token ? { Authorization: 'Bearer ' + token } : {};
+
+async function api(path, options = {}) {
+  const headers = { ...(options.headers || {}), ...authHeaders() };
+  if (!(options.body instanceof FormData)) headers['Content-Type'] = 'application/json';
+  const res = await fetch(API_BASE + path, { ...options, headers });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
+function toast(message, type = 'info') {
+  const t = $('toast');
+  t.textContent = message;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 2600);
+}
+
+function openModal(id) { $(id)?.classList.add('open'); if (id === 'postListingModal' || id === 'priceAlertModal') loadBookOptions(); }
+function closeModal(id) { $(id)?.classList.remove('open'); }
+function requireAuth(next) { if (!token) return openModal('loginModal'); next(); }
+
+function showPage(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  $('page-' + page)?.classList.add('active');
+  document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
+  if (page === 'home') loadHome();
+  if (page === 'search') loadSearchListings();
+  if (page === 'wishlist') loadWishlist();
+  if (page === 'profile') loadProfile();
+  if (page === 'requests') loadRequests();
+  if (page === 'chat') loadChatRooms();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function updateAuthUI() {
+  $('authButtons').style.display = currentUser ? 'none' : 'flex';
+  $('userMenu').style.display = currentUser ? 'block' : 'none';
+  $('wishBtn').style.display = currentUser ? 'flex' : 'none';
+  $('msgBtn').style.display = currentUser ? 'flex' : 'none';
+  if (currentUser) {
+    $('navUserName').textContent = currentUser.name;
+    $('navUserAvatar').textContent = currentUser.name?.charAt(0).toUpperCase() || 'U';
+    connectSocket();
+  }
+}
+
+async function login() {
+  $('loginError').textContent = '';
+  try {
+    const data = await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: $('loginEmail').value, password: $('loginPassword').value }) });
+    token = data.token; currentUser = data.user;
+    localStorage.setItem('bookexchange_token', token);
+    localStorage.setItem('bookexchange_user', JSON.stringify(currentUser));
+    closeModal('loginModal'); updateAuthUI(); loadHome(); toast('Signed in successfully', 'success');
+  } catch (e) { $('loginError').textContent = e.message; }
+}
+
+async function register() {
+  $('regError').textContent = '';
+  try {
+    const data = await api('/api/auth/register', { method: 'POST', body: JSON.stringify({
+      name: $('regName').value, email: $('regEmail').value, password: $('regPassword').value,
+      phone: $('regPhone').value, branch: $('regBranch').value, year: $('regYear').value
+    }) });
+    token = data.token; currentUser = data.user;
+    localStorage.setItem('bookexchange_token', token);
+    localStorage.setItem('bookexchange_user', JSON.stringify(currentUser));
+    closeModal('registerModal'); updateAuthUI(); loadHome(); toast('Account created', 'success');
+  } catch (e) { $('regError').textContent = e.message; }
+}
+
+function logout() {
+  token = ''; currentUser = null; localStorage.clear(); updateAuthUI(); showPage('home');
+}
+
+function listingCard(l) {
+  const img = l.cover_image_override || l.cover_image;
+  const badge = l.listing_type || 'sale';
+  return `<div class="listing-card" onclick="openListing(${l.id || l.listing_id})">
+    <div class="listing-cover">${img ? `<img src="${esc(img)}" alt="${esc(l.title)}">` : '<div class="listing-cover-placeholder">Book</div>'}<span class="book-badge badge-${badge}">${badge}</span></div>
+    <div class="listing-body"><div class="listing-title">${esc(l.title)}</div><div class="listing-author">${esc(l.author || l.subject || '')}</div>
+    <div class="listing-price">${money(l.price)}</div><div class="listing-meta"><span class="book-cond cond-${esc(l.condition_label || l.condition_rating || 'Good')}">${esc(l.condition_label || l.condition_rating || '')}</span><span class="listing-seller">Star ${Number(l.trust_score || 0).toFixed(1)} ${esc(l.seller_name || '')}</span></div></div>
+  </div>`;
+}
+
+function bookCard(b) {
+  const id = b.id || b.book_id;
+  return `<div class="book-card" onclick="showSearch('${esc(b.title)}')">
+    <div class="book-cover">${b.cover_image ? `<img src="${esc(b.cover_image)}" alt="${esc(b.title)}">` : '<div class="book-cover-placeholder">Book</div>'}</div>
+    <div class="book-info"><div class="book-title">${esc(b.title)}</div><div class="book-author">${esc(b.author)}</div><div class="book-rating"><span class="stars"></span><span class="rating-num">${Number(b.rating || 0).toFixed(1)}</span></div></div>
+  </div>`;
+}
+
+async function loadHome() {
+  try {
+    const [stats, trending, latest] = await Promise.all([api('/api/stats'), api('/api/books/trending'), api('/api/listings')]);
+    $('statListings').textContent = stats.listings ?? 0; $('statStudents').textContent = stats.students ?? 0; $('statBooks').textContent = stats.books ?? 0; $('statSaved').textContent = '' + Number(stats.estimated_savings || 0).toLocaleString('en-IN');
+    $('trendingCarousel').innerHTML = trending.map(bookCard).join('') || empty('No books yet');
+    $('latestListings').innerHTML = latest.slice(0, 8).map(listingCard).join('') || empty('No listings yet');
+    if (token) {
+      $('recommendSection').style.display = 'block';
+      const rec = await api('/api/books/recommend').catch(() => []);
+      $('recCarousel').innerHTML = rec.map(bookCard).join('') || empty('No recommendations yet');
+    }
+  } catch (e) { toast('Backend not connected: ' + e.message, 'error'); }
+}
+
+function empty(text) { return `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">Book</div><h3>${esc(text)}</h3></div>`; }
+
+function doSearch() { showSearch($('navSearchInput').value.trim()); }
+function showSearch(q = '') { currentSearch = q; $('searchHeading').textContent = q ? `Results for "${q}"` : 'All Listings'; showPage('search'); }
+function showSearchByCategory(branch) { $('filterBranch').value = branch; currentSearch = ''; showPage('search'); }
+function showSearchByType(type) { $('filterType').value = type; currentSearch = ''; showPage('search'); }
+function filterByChip(branch, el) { document.querySelectorAll('.cat-chip').forEach(c => c.classList.remove('active')); el.classList.add('active'); $('filterBranch').value = branch; showPage('search'); }
+function filterByChipType(type, el) { document.querySelectorAll('.cat-chip').forEach(c => c.classList.remove('active')); el.classList.add('active'); $('filterType').value = type; showPage('search'); }
+
+async function loadSearchListings() {
+  const params = new URLSearchParams({ search: currentSearch, branch: $('filterBranch')?.value || '', condition: $('filterCondition')?.value || '', type: $('filterType')?.value || '', min_price: $('minPrice')?.value || '', max_price: $('maxPrice')?.value || '', sort: $('sortBy')?.value || '' });
+  const listings = await api('/api/listings?' + params.toString()).catch(e => { toast(e.message, 'error'); return []; });
+  $('searchCount').textContent = listings.length + ' listings';
+  $('searchGrid').innerHTML = listings.map(listingCard).join('') || empty('No matching listings');
+}
+
+async function openListing(id) {
+  openModal('listingModal'); $('listingModalBody').innerHTML = '<div class="loading-state"><div class="spinner"></div></div>';
+  const l = await api('/api/listings/' + id).catch(e => ({ error: e.message }));
+  if (l.error) return $('listingModalBody').innerHTML = empty(l.error);
+  $('listingModalTitle').textContent = l.title;
+  const img = l.cover_image_override || l.cover_image;
+  $('listingModalBody').innerHTML = `<div class="detail-grid"><div class="detail-cover">${img ? `<img src="${esc(img)}">` : '<div class="detail-cover-ph">Book</div>'}</div><div class="detail-info">
+    <div class="detail-price">${money(l.price)}</div><div class="detail-badges"><span class="chip chip-green">${esc(l.listing_type)}</span><span class="chip chip-gold">${esc(l.condition_label)}</span></div>
+    <p class="detail-desc">${esc(l.condition_notes || l.book_desc || 'No description added.')}</p>
+    <table class="detail-table"><tr><td>Author</td><td>${esc(l.author)}</td></tr><tr><td>Subject</td><td>${esc(l.subject)}</td></tr><tr><td>Seller</td><td>${esc(l.seller_name)} - ${esc(l.seller_email || '')}</td></tr></table>
+    <div class="detail-actions"><button class="btn btn-primary" onclick="requireAuth(()=>startChat(${l.id}))">Chat with Seller</button><button class="btn btn-outline" onclick="requireAuth(()=>addWishlist(${l.book_id}))">Wishlist</button></div>
+  </div></div>`;
+}
+
+async function loadBookOptions() {
+  const books = await api('/api/books').catch(() => []);
+  const options = '<option value="">Select a book...</option>' + books.map(b => `<option value="${b.id}">${esc(b.title)} - ${esc(b.author)}</option>`).join('');
+  if ($('bookSelectDropdown')) $('bookSelectDropdown').innerHTML = options;
+  if ($('alertBookSelect')) $('alertBookSelect').innerHTML = options;
+}
+function toggleAddBook() { const box = $('addBookFields'); box.style.display = box.style.display === 'none' ? 'block' : 'none'; }
+function togglePriceField() { const t = $('listingTypeSelect').value; $('priceField').style.display = t === 'sale' ? 'block' : 'none'; $('exchangeField').style.display = t === 'exchange' ? 'block' : 'none'; }
+
+async function addBookToCatalog() {
+  const f = new FormData($('postListingForm'));
+  const data = await api('/api/books', { method: 'POST', body: JSON.stringify({ title: f.get('new_title'), author: f.get('new_author'), subject: f.get('new_subject'), isbn: f.get('new_isbn'), category: f.get('new_category'), semester: f.get('new_semester') }) }).catch(e => { $('postError').textContent = e.message; });
+  if (data?.id) { await loadBookOptions(); $('bookSelectDropdown').value = data.id; toggleAddBook(); toast('Book added to catalog', 'success'); }
+}
+
+async function submitListing() {
+  $('postError').textContent = '';
+  const form = $('postListingForm');
+  const body = new FormData(form);
+  try { await api('/api/listings', { method: 'POST', body }); closeModal('postListingModal'); form.reset(); await loadHome(); toast('Listing posted', 'success'); }
+  catch (e) { $('postError').textContent = e.message; }
+}
+
+async function loadWishlist() {
+  const items = await api('/api/wishlist').catch(e => { toast(e.message, 'error'); return []; });
+  $('wishlistContent').innerHTML = items.map(i => `<div class="wishlist-item"><div class="wishlist-thumb">${i.cover_image ? `<img src="${esc(i.cover_image)}">` : '<div class="wishlist-thumb-ph">Book</div>'}</div><div class="wishlist-info"><div class="wishlist-title">${esc(i.title)}</div><div class="wishlist-author">${esc(i.author)}</div><span class="wishlist-avail">${i.available_count} available</span></div><button class="wishlist-remove" onclick="removeWishlist(${i.book_id})">x</button></div>`).join('') || empty('Your wishlist is empty');
+}
+async function addWishlist(bookId) { await api('/api/wishlist', { method: 'POST', body: JSON.stringify({ book_id: bookId }) }).catch(e => toast(e.message, 'error')); toast('Added to wishlist', 'success'); }
+async function removeWishlist(bookId) { await api('/api/wishlist/' + bookId, { method: 'DELETE' }); loadWishlist(); }
+async function setPriceAlert() { try { await api('/api/price-alerts', { method: 'POST', body: JSON.stringify({ book_id: $('alertBookSelect').value, target_price: $('alertPrice').value }) }); closeModal('priceAlertModal'); toast('Price alert saved', 'success'); } catch(e) { $('alertError').textContent = e.message; } }
+
+async function loadProfile() {
+  const u = await api('/api/users/me').catch(e => { toast(e.message, 'error'); return null; }); if (!u) return;
+  $('profileAvatar').textContent = u.name.charAt(0).toUpperCase(); $('profileName').textContent = u.name; $('profileMeta').textContent = `${u.department || 'Student'} ${u.year ? '- Year ' + u.year : ''} - ${u.college_name || ''}`; $('profileTrust').textContent = Number(u.trust_score || 0).toFixed(1); $('profileRatings').textContent = `${u.total_ratings || 0} ratings`;
+  $('editName').value = u.name || ''; $('editPhone').value = u.phone || ''; $('editBranch').value = u.department || ''; $('editBio').value = u.bio || '';
+  $('profileListings').innerHTML = (u.listings || []).map(listingCard).join('') || empty('You have not posted listings yet');
+  $('profileRatingsList').innerHTML = (u.ratings_received || []).map(r => `<div class="review-card"><div class="reviewer-name">Rating: ${r.score}/5</div><div class="review-text">${esc(r.review_text || '')}</div></div>`).join('') || 'No ratings yet.';
+  $('goalsList').innerHTML = (u.reading_goals || []).map(goalCard).join('') || empty('No reading goals yet');
+}
+function switchProfileTab(tab, id) { ['pMyListings','pRatings','pReadingGoals'].forEach(x => $(x).style.display = x === id ? 'block' : 'none'); document.querySelectorAll('.ptab').forEach(t => t.classList.remove('active')); tab.classList.add('active'); }
+async function saveProfile() { await api('/api/users/me', { method: 'PUT', body: JSON.stringify({ name: $('editName').value, phone: $('editPhone').value, department: $('editBranch').value, bio: $('editBio').value }) }); closeModal('editProfileModal'); loadProfile(); toast('Profile saved', 'success'); }
+function goalCard(g) { return `<div class="goal-card"><div class="goal-title">${esc(g.title)}</div><div class="goal-date">Target: ${esc(g.target_date || 'Anytime')}</div><span class="goal-status status-${esc(g.status || 'in_progress')}">${esc(g.status || 'in progress')}</span></div>`; }
+async function addGoal() { await api('/api/reading-goals', { method: 'POST', body: JSON.stringify({ title: $('goalTitle').value, target_date: $('goalDate').value, notes: $('goalNotes').value }) }); closeModal('goalModal'); loadProfile(); }
+
+async function loadRequests() {
+  const reqs = await api('/api/book-requests').catch(() => []);
+  $('requestsList').innerHTML = reqs.map(r => `<div class="request-card"><div class="request-title">${esc(r.title)}</div><div class="request-meta">${esc(r.author || '')} ${r.subject ? '- ' + esc(r.subject) : ''}</div><div class="request-budget">Budget: ${money(r.max_price)}</div><div class="review-text">${esc(r.notes || '')}</div><div class="request-requester">By ${esc(r.requester_name)} (${esc(r.requester_dept || 'student')})</div></div>`).join('') || empty('No open requests');
+}
+async function submitBookRequest() { try { await api('/api/book-requests', { method: 'POST', body: JSON.stringify({ title: $('reqTitle').value, author: $('reqAuthor').value, subject: $('reqSubject').value, max_price: $('reqBudget').value, notes: $('reqNotes').value }) }); closeModal('requestModal'); loadRequests(); toast('Request posted', 'success'); } catch(e) { $('reqError').textContent = e.message; } }
+
+async function startChat(listingId) { const room = await api('/api/chat/rooms', { method: 'POST', body: JSON.stringify({ listing_id: listingId }) }); closeModal('listingModal'); showPage('chat'); setTimeout(() => openRoom(room.id), 300); }
+async function loadChatRooms() { const rooms = await api('/api/chat/rooms').catch(() => []); $('chatRoomsList').innerHTML = rooms.map(r => `<div class="chat-room" onclick="openRoom(${r.id})"><div class="chat-room-icon">Msg</div><div class="chat-room-info"><div class="chat-room-title">${esc(r.title)}</div><div class="chat-room-sub">${esc(r.other_user_name || '')}</div></div></div>`).join('') || '<div class="chat-empty"><p>No conversations yet</p></div>'; }
+async function openRoom(id) { currentRoomId = id; const msgs = await api(`/api/chat/rooms/${id}/messages`).catch(() => []); $('chatMain').innerHTML = `<div class="chat-header">Conversation <span class="chat-typing" id="typing"></span></div><div class="messages-area" id="messagesArea">${msgs.map(messageHtml).join('')}</div><div class="chat-input-area"><textarea id="chatInput" placeholder="Type a message..."></textarea><button class="chat-send-btn" onclick="sendMessage()">></button></div>`; socket?.emit('join_room', id); }
+function messageHtml(m) { const mine = String(m.sender_id) === String(currentUser?.id); return `<div class="msg ${mine ? 'msg-mine' : 'msg-other'}"><div class="msg-sender">${esc(m.sender_name || (mine ? 'You' : 'Student'))}</div>${esc(m.content || m.message_text)}</div>`; }
+function sendMessage() { const input = $('chatInput'); if (!input?.value.trim()) return; socket?.emit('send_message', { room_id: currentRoomId, content: input.value }); input.value = ''; }
+function connectSocket() { if (!window.io || socket) return; socket = io(API_BASE, { auth: { token } }); socket.on('new_message', m => { if (String(m.room_id) === String(currentRoomId) && $('messagesArea')) $('messagesArea').insertAdjacentHTML('beforeend', messageHtml(m)); }); }
+
+async function toggleNotifications() { if (!token) return openModal('loginModal'); $('notifPanel').classList.toggle('open'); const notes = await api('/api/notifications').catch(() => []); $('notifCount').style.display = notes.filter(n => !n.is_read).length ? 'flex' : 'none'; $('notifCount').textContent = notes.filter(n => !n.is_read).length; $('notifList').innerHTML = notes.map(n => `<div class="notif-item ${n.is_read ? '' : 'unread'}">${esc(n.message)}<div class="notif-type">${esc(n.type)}</div></div>`).join('') || '<div class="notif-empty">No notifications yet</div>'; }
+async function markAllRead() { await api('/api/notifications/read-all', { method: 'PUT' }).catch(() => null); toggleNotifications(); }
+function scrollCarousel(id, dir) { $(id)?.scrollBy({ left: dir * 420, behavior: 'smooth' }); }
+function slideHero(dir) { goSlide(heroIndex + dir); }
+function goSlide(i) { heroIndex = (i + 3) % 3; $('heroSlides').style.transform = `translateX(-${heroIndex * 100}%)`; document.querySelectorAll('.hero-dot').forEach((d, idx) => d.classList.toggle('active', idx === heroIndex)); }
+
+window.addEventListener('DOMContentLoaded', () => { updateAuthUI(); loadHome(); loadBookOptions(); setInterval(() => slideHero(1), 5500); });
+</script>
+</body>
+</html>
+
+
