@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BookExchange - Campus Book Marketplace</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"></script>
+<script src="/socket.io/socket.io.js"></script>
 <style>
 /*  DESIGN TOKENS  */
 :root {
@@ -469,11 +469,12 @@ input,select,textarea{font-family:inherit;}
         <button class="btn btn-ghost btn-sm" onclick="openModal('loginModal')" style="color:#fff;border-color:rgba(255,255,255,0.3);">Sign in</button>
         <button class="btn btn-primary btn-sm" onclick="openModal('registerModal')">Register</button>
       </div>
-      <div id="userMenu" style="display:none;">
+      <div id="userMenu" style="display:none;gap:8px;align-items:center;">
         <button class="nav-user-btn" onclick="showPage('profile')">
           <div class="nav-user-avatar" id="navUserAvatar">?</div>
           <span id="navUserName">User</span>
         </button>
+        <button class="btn btn-ghost btn-sm" onclick="logout()" style="color:#fff;border-color:rgba(255,255,255,0.3);">Logout</button>
       </div>
     </div>
   </div>
@@ -1093,7 +1094,7 @@ function showPage(page) {
 
 function updateAuthUI() {
   $('authButtons').style.display = currentUser ? 'none' : 'flex';
-  $('userMenu').style.display = currentUser ? 'block' : 'none';
+  $('userMenu').style.display = currentUser ? 'flex' : 'none';
   $('wishBtn').style.display = currentUser ? 'flex' : 'none';
   $('msgBtn').style.display = currentUser ? 'flex' : 'none';
   if (currentUser) {
@@ -1244,8 +1245,8 @@ async function loadRequests() {
 }
 async function submitBookRequest() { try { await api('/api/book-requests', { method: 'POST', body: JSON.stringify({ title: $('reqTitle').value, author: $('reqAuthor').value, subject: $('reqSubject').value, max_price: $('reqBudget').value, notes: $('reqNotes').value }) }); closeModal('requestModal'); loadRequests(); toast('Request posted', 'success'); } catch(e) { $('reqError').textContent = e.message; } }
 
-async function startChat(listingId) { const room = await api('/api/chat/rooms', { method: 'POST', body: JSON.stringify({ listing_id: listingId }) }); closeModal('listingModal'); showPage('chat'); setTimeout(() => openRoom(room.id), 300); }
-async function loadChatRooms() { const rooms = await api('/api/chat/rooms').catch(() => []); $('chatRoomsList').innerHTML = rooms.map(r => `<div class="chat-room" onclick="openRoom(${r.id})"><div class="chat-room-icon">Msg</div><div class="chat-room-info"><div class="chat-room-title">${esc(r.title)}</div><div class="chat-room-sub">${esc(r.other_user_name || '')}</div></div></div>`).join('') || '<div class="chat-empty"><p>No conversations yet</p></div>'; }
+async function startChat(listingId) { try { const room = await api('/api/chat/rooms', { method: 'POST', body: JSON.stringify({ listing_id: listingId }) }); closeModal('listingModal'); showPage('chat'); setTimeout(() => openRoom(room.id), 300); } catch (e) { toast(e.message, 'error'); } }
+async function loadChatRooms() { const rooms = await api('/api/chat/rooms').catch(() => []); $('chatRoomsList').innerHTML = rooms.map(r => { const other = currentUser?.id === r.buyer_id ? r.seller_name : r.buyer_name; return `<div class="chat-room" onclick="openRoom(${r.id})"><div class="chat-room-icon">Msg</div><div class="chat-room-info"><div class="chat-room-title">${esc(r.book_title || 'Conversation')}</div><div class="chat-room-sub">${esc(other || '')}</div></div></div>`; }).join('') || '<div class="chat-empty"><p>No conversations yet</p></div>'; }
 async function openRoom(id) { currentRoomId = id; const msgs = await api(`/api/chat/rooms/${id}/messages`).catch(() => []); $('chatMain').innerHTML = `<div class="chat-header">Conversation <span class="chat-typing" id="typing"></span></div><div class="messages-area" id="messagesArea">${msgs.map(messageHtml).join('')}</div><div class="chat-input-area"><textarea id="chatInput" placeholder="Type a message..."></textarea><button class="chat-send-btn" onclick="sendMessage()">></button></div>`; socket?.emit('join_room', id); }
 function messageHtml(m) { const mine = String(m.sender_id) === String(currentUser?.id); return `<div class="msg ${mine ? 'msg-mine' : 'msg-other'}"><div class="msg-sender">${esc(m.sender_name || (mine ? 'You' : 'Student'))}</div>${esc(m.content || m.message_text)}</div>`; }
 function sendMessage() { const input = $('chatInput'); if (!input?.value.trim()) return; socket?.emit('send_message', { room_id: currentRoomId, content: input.value }); input.value = ''; }

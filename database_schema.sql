@@ -629,7 +629,7 @@ DELIMITER ;
 
 INSERT INTO Users (name, email, password_hash, phone, department, year, bio, trust_score, total_ratings, is_verified) VALUES
 ('Arjun Sharma',   'arjun@vardhaman.ac.in',  '$2b$10$xSampleHash1', '9876543210', 'CSE',   3, 'CSE 3rd year | Love sharing books!',   4.8, 24, 1),
-('Priya Reddy',    'priya@vardhaman.ac.in',   '$2b$10$xSampleHash2', '9876543211', 'ECE',   2, 'ECE student | Always buying textbooks', 4.5, 12, 1),
+('Seetha Reddy',   'priya@vardhaman.ac.in',   '$2b$10$xSampleHash2', '9876543211', 'ECE',   2, 'ECE student | Always buying textbooks', 4.5, 12, 1),
 ('Rahul Verma',    'rahul@vardhaman.ac.in',   '$2b$10$xSampleHash3', '9876543212', 'MECH',  4, 'Final year — selling everything!',      4.9, 38, 1),
 ('Sneha Patel',    'sneha@vardhaman.ac.in',   '$2b$10$xSampleHash4', '9876543213', 'CIVIL', 2, 'Looking for CIVIL books',               4.2,  8, 0),
 ('Mohammed Irfan', 'irfan@vardhaman.ac.in',   '$2b$10$xSampleHash5', '9876543214', 'EEE',   3, 'EEE | happy to exchange',               4.6, 16, 1);
