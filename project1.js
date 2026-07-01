@@ -37,8 +37,10 @@ const io     = new Server(server, { cors: { origin: '*' } });
 const JWT_SECRET = process.env.JWT_SECRET || 'bookexchange_super_secret_2024';
 const PORT       = process.env.PORT || 5000;
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
+const PDF_DIR    = path.join(__dirname, 'private_uploads', 'pdfs');
 
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+if (!fs.existsSync(PDF_DIR)) fs.mkdirSync(PDF_DIR, { recursive: true });
 
 // â”€â”€â”€ DATABASE POOL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const pool = mysql.createPool({
@@ -62,7 +64,7 @@ const qAll  = async (sql, params) => { const [rows] = await pool.execute(sql, pa
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(fileUpload({ limits: { fileSize: 5 * 1024 * 1024 }, createParentPath: true }));
+app.use(fileUpload({ limits: { fileSize: 25 * 1024 * 1024 }, createParentPath: true }));
 app.use('/uploads', express.static(UPLOAD_DIR));
 app.use(express.static(path.join(__dirname, 'frontend')));
 
@@ -78,6 +80,19 @@ function optionalAuth(req, res, next) {
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (token) { try { req.user = jwt.verify(token, JWT_SECRET); } catch {} }
   next();
+}
+
+async function saveUploadedFile(file, folder, allowedExts) {
+  const ext = path.extname(file.name || '').toLowerCase();
+  if (!allowedExts.includes(ext)) throw new Error(`Only ${allowedExts.join(', ')} files are allowed`);
+  const fname = uuidv4() + ext;
+  await file.mv(path.join(folder, fname));
+  return { filename: fname, originalName: file.name };
+}
+
+function publicListing(listing) {
+  const { pdf_file_path, ...safe } = listing;
+  return { ...safe, has_pdf: Boolean(pdf_file_path) };
 }
 
 // â”€â”€â”€ HEALTH CHECK â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -150,7 +165,7 @@ app.get('/api/users/me', auth, async (req, res) => {
     const { password_hash, ...safeUser } = user;
     res.json({
       ...safeUser, id: user.user_id,
-      listings,
+      listings: listings.map(publicListing),
       ratings_received: ratings,
       ratings_given_count: givenCount?.cnt || 0,
       transaction_count: txns.length,
@@ -161,10 +176,30 @@ app.get('/api/users/me', auth, async (req, res) => {
 
 app.put('/api/users/me', auth, async (req, res) => {
   try {
-    const { name, phone, department, bio, year, college_name } = req.body;
+    const { name, phone, department, bio, year, college_name, upi_id } = req.body;
+    const existing = await qOne('SELECT * FROM Users WHERE user_id = ?', [req.user.id]);
+    if (!existing) return res.status(404).json({ error: 'User not found' });
+    let upiQrImage = null;
+    if (req.files?.upi_qr) {
+      const saved = await saveUploadedFile(req.files.upi_qr, UPLOAD_DIR, ['.jpg', '.jpeg', '.png', '.webp']);
+      upiQrImage = '/uploads/' + saved.filename;
+    }
     await pool.execute(
-      'UPDATE Users SET name=?, phone=?, department=?, bio=?, year=?, college_name=?, updated_at=NOW() WHERE user_id=?',
-      [name, phone, department, bio, year, college_name, req.user.id]
+      `UPDATE Users
+       SET name=?, phone=?, department=?, bio=?, year=?, college_name=?, upi_id=?,
+           upi_qr_image=COALESCE(?, upi_qr_image), updated_at=NOW()
+       WHERE user_id=?`,
+      [
+        name ?? existing.name,
+        phone ?? existing.phone,
+        department ?? existing.department,
+        bio ?? existing.bio,
+        year ?? existing.year,
+        college_name ?? existing.college_name,
+        upi_id ?? existing.upi_id,
+        upiQrImage,
+        req.user.id
+      ]
     );
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -188,7 +223,7 @@ app.get('/api/users/:id/profile', async (req, res) => {
       [req.params.id]
     );
     const { password_hash, ...safeUser } = user;
-    res.json({ ...safeUser, id: user.user_id, active_listings: listings, ratings });
+    res.json({ ...safeUser, id: user.user_id, active_listings: listings.map(publicListing), ratings });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -308,7 +343,7 @@ app.get('/api/listings', optionalAuth, async (req, res) => {
     sql += ' LIMIT 100';
 
     const listings = await qAll(sql, params);
-    res.json(listings.map(l => ({ ...l, id: l.listing_id, condition_label: l.condition_rating })));
+    res.json(listings.map(l => publicListing({ ...l, id: l.listing_id, condition_label: l.condition_rating })));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -317,7 +352,7 @@ app.get('/api/listings/:id', optionalAuth, async (req, res) => {
     const l = await qOne(
       `SELECT l.*, b.title, b.author, b.subject, b.isbn, b.semester, b.cover_image,
               b.description AS book_desc, b.publisher,
-              u.name AS seller_name, u.email AS seller_email,
+              u.name AS seller_name, u.email AS seller_email, u.upi_id, u.upi_qr_image,
               u.trust_score, u.total_ratings
        FROM Listings l
        JOIN Books b ON l.book_id = b.book_id
@@ -328,30 +363,42 @@ app.get('/api/listings/:id', optionalAuth, async (req, res) => {
     if (!l) return res.status(404).json({ error: 'Listing not found' });
 
     await pool.execute('UPDATE Listings SET views_count = views_count + 1 WHERE listing_id = ?', [req.params.id]);
-    res.json({ ...l, id: l.listing_id, condition_label: l.condition_rating });
+    res.json(publicListing({ ...l, id: l.listing_id, condition_label: l.condition_rating }));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/listings', auth, async (req, res) => {
   try {
-    let { book_id, listing_type, price, condition_label, description, preferred_exchange, location } = req.body;
+    let { book_id, listing_type, fulfillment_mode, price, condition_label, description, preferred_exchange, location } = req.body;
     if (!book_id)         return res.status(400).json({ error: 'Book required' });
     if (!condition_label) return res.status(400).json({ error: 'Condition required' });
+    fulfillment_mode = ['physical', 'online', 'both'].includes(fulfillment_mode) ? fulfillment_mode : 'physical';
 
     let cover_image = null;
     if (req.files?.image) {
-      const file = req.files.image;
-      const fname = uuidv4() + path.extname(file.name);
-      await file.mv(path.join(UPLOAD_DIR, fname));
-      cover_image = '/uploads/' + fname;
+      const saved = await saveUploadedFile(req.files.image, UPLOAD_DIR, ['.jpg', '.jpeg', '.png', '.webp']);
+      cover_image = '/uploads/' + saved.filename;
+    }
+
+    let pdfPath = null;
+    let pdfOriginalName = null;
+    if (req.files?.pdf_file) {
+      const saved = await saveUploadedFile(req.files.pdf_file, PDF_DIR, ['.pdf']);
+      pdfPath = path.join('private_uploads', 'pdfs', saved.filename);
+      pdfOriginalName = saved.originalName;
+    }
+    if ((fulfillment_mode === 'online' || fulfillment_mode === 'both') && !pdfPath) {
+      return res.status(400).json({ error: 'Upload a PDF for online book delivery.' });
     }
 
     const [result] = await pool.execute(
-      `INSERT INTO Listings (seller_id, book_id, listing_type, price, condition_rating,
-                             condition_notes, cover_image_override, preferred_exchange, location, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
-      [req.user.id, book_id, listing_type || 'sale', price ? parseFloat(price) : null,
-       condition_label, description || '', cover_image, preferred_exchange || null, location || null]
+      `INSERT INTO Listings (seller_id, book_id, listing_type, fulfillment_mode, price, condition_rating,
+                             condition_notes, cover_image_override, pdf_file_path, pdf_original_name,
+                             preferred_exchange, location, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
+      [req.user.id, book_id, listing_type || 'sale', fulfillment_mode, price ? parseFloat(price) : null,
+       condition_label, description || '', cover_image, pdfPath, pdfOriginalName,
+       preferred_exchange || null, location || null]
     );
 
     // Notify wishlist users
@@ -371,7 +418,7 @@ app.post('/api/listings', auth, async (req, res) => {
     }
 
     const listing = await qOne('SELECT * FROM Listings WHERE listing_id = ?', [result.insertId]);
-    res.status(201).json({ ...listing, id: listing.listing_id });
+    res.status(201).json(publicListing({ ...listing, id: listing.listing_id }));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -496,19 +543,155 @@ app.get('/api/chat/rooms/:id/messages', auth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+app.post('/api/chat/rooms/:id/messages', auth, async (req, res) => {
+  try {
+    const { content } = req.body;
+    if (!content?.trim()) return res.status(400).json({ error: 'Message required' });
+
+    const room = await qOne('SELECT * FROM Chats WHERE chat_id = ?', [req.params.id]);
+    if (!room) return res.status(404).json({ error: 'Room not found' });
+    if (room.buyer_id !== req.user.id && room.seller_id !== req.user.id)
+      return res.status(403).json({ error: 'Forbidden' });
+
+    const [r] = await pool.execute(
+      "INSERT INTO Messages (chat_id, sender_id, message_text, is_read) VALUES (?, ?, ?, 0)",
+      [req.params.id, req.user.id, content.trim()]
+    );
+    await pool.execute('UPDATE Chats SET last_message_at = NOW() WHERE chat_id = ?', [req.params.id]);
+
+    const payload = {
+      id: r.insertId,
+      chat_id: Number(req.params.id),
+      sender_id: req.user.id,
+      sender_name: req.user.name,
+      content: content.trim(),
+      message_text: content.trim(),
+      sent_at: new Date().toISOString(),
+      is_read: 0,
+      room_id: Number(req.params.id),
+    };
+    io.to(String(req.params.id)).emit('new_message', payload);
+
+    const otherUserId = room.buyer_id === req.user.id ? room.seller_id : room.buyer_id;
+    await pool.execute(
+      "INSERT INTO Notifications (user_id, type, message, related_id) VALUES (?, 'message', ?, ?)",
+      [otherUserId, `New message from ${req.user.name}: "${content.slice(0, 50)}"`, req.params.id]
+    );
+    res.status(201).json(payload);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // â”€â”€â”€ TRANSACTIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app.post('/api/transactions', auth, async (req, res) => {
   try {
     const { listing_id, payment_method, notes } = req.body;
-    const listing = await qOne('SELECT * FROM Listings WHERE listing_id = ?', [listing_id]);
+    const listing = await qOne(
+      `SELECT l.*, b.title, u.name AS seller_name, u.upi_id, u.upi_qr_image
+       FROM Listings l
+       JOIN Books b ON l.book_id = b.book_id
+       JOIN Users u ON l.seller_id = u.user_id
+       WHERE l.listing_id = ?`,
+      [listing_id]
+    );
     if (!listing) return res.status(404).json({ error: 'Listing not found' });
+    if (listing.seller_id === req.user.id) return res.status(400).json({ error: 'Cannot buy your own listing' });
+    if (!['online', 'both'].includes(listing.fulfillment_mode) || !listing.pdf_file_path)
+      return res.status(400).json({ error: 'This listing is not available as an online PDF.' });
+
+    const existing = await qOne(
+      `SELECT transaction_id FROM Transactions
+       WHERE listing_id=? AND buyer_id=? AND status IN ('pending','confirmed','completed')`,
+      [listing_id, req.user.id]
+    );
+    if (existing) return res.json({ success: true, id: existing.transaction_id, already_requested: true });
+
     const [r] = await pool.execute(
       `INSERT INTO Transactions (listing_id, buyer_id, seller_id, transaction_type, agreed_price, payment_method, status, notes)
        VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`,
       [listing_id, req.user.id, listing.seller_id, listing.listing_type,
        listing.price || 0, payment_method || 'cash', notes || null]
     );
-    res.status(201).json({ success: true, id: r.insertId });
+    await pool.execute(
+      `INSERT INTO Notifications (user_id, type, title, message, related_id)
+       VALUES (?, 'transaction', 'PDF purchase request', ?, ?)`,
+      [listing.seller_id, `${req.user.name || 'A buyer'} requested online PDF access for "${listing.title}".`, r.insertId]
+    );
+    res.status(201).json({
+      success: true,
+      id: r.insertId,
+      seller_payment: { seller_name: listing.seller_name, upi_id: listing.upi_id, upi_qr_image: listing.upi_qr_image }
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/transactions/mine', auth, async (req, res) => {
+  try {
+    const rows = await qAll(
+      `SELECT t.*, b.title, b.author, l.fulfillment_mode, l.pdf_original_name,
+              buyer.name AS buyer_name, seller.name AS seller_name,
+              seller.upi_id AS seller_upi_id, seller.upi_qr_image AS seller_upi_qr_image
+       FROM Transactions t
+       JOIN Listings l ON t.listing_id = l.listing_id
+       JOIN Books b ON l.book_id = b.book_id
+       JOIN Users buyer ON t.buyer_id = buyer.user_id
+       JOIN Users seller ON t.seller_id = seller.user_id
+       WHERE t.buyer_id = ? OR t.seller_id = ?
+       ORDER BY t.created_at DESC`,
+      [req.user.id, req.user.id]
+    );
+    res.json(rows.map(r => ({ ...r, id: r.transaction_id, role: r.buyer_id === req.user.id ? 'buyer' : 'seller' })));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/transactions/:id/approve-pdf', auth, async (req, res) => {
+  try {
+    const txn = await qOne(
+      `SELECT t.*, l.pdf_file_path, b.title
+       FROM Transactions t
+       JOIN Listings l ON t.listing_id = l.listing_id
+       JOIN Books b ON l.book_id = b.book_id
+       WHERE t.transaction_id = ?`,
+      [req.params.id]
+    );
+    if (!txn) return res.status(404).json({ error: 'Transaction not found' });
+    if (txn.seller_id !== req.user.id) return res.status(403).json({ error: 'Only the seller can approve PDF access' });
+    if (!txn.pdf_file_path) return res.status(400).json({ error: 'No PDF is attached to this listing' });
+
+    await pool.execute(
+      `UPDATE Transactions
+       SET status='confirmed', confirmed_by_seller=1, pdf_access_granted=1, pdf_approved_at=NOW()
+       WHERE transaction_id=?`,
+      [req.params.id]
+    );
+    await pool.execute(
+      `INSERT INTO Notifications (user_id, type, title, message, related_id)
+       VALUES (?, 'transaction', 'PDF access approved', ?, ?)`,
+      [txn.buyer_id, `Your PDF access for "${txn.title}" has been approved.`, req.params.id]
+    );
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/transactions/:id/download', auth, async (req, res) => {
+  try {
+    const txn = await qOne(
+      `SELECT t.*, l.pdf_file_path, l.pdf_original_name
+       FROM Transactions t
+       JOIN Listings l ON t.listing_id = l.listing_id
+       WHERE t.transaction_id = ?`,
+      [req.params.id]
+    );
+    if (!txn) return res.status(404).json({ error: 'Transaction not found' });
+    const isBuyer = txn.buyer_id === req.user.id;
+    const isSeller = txn.seller_id === req.user.id;
+    if (!isBuyer && !isSeller) return res.status(403).json({ error: 'Forbidden' });
+    if (isBuyer && !txn.pdf_access_granted) return res.status(403).json({ error: 'Seller has not approved PDF access yet' });
+    if (!txn.pdf_file_path) return res.status(404).json({ error: 'No PDF file found' });
+
+    const filePath = path.resolve(__dirname, txn.pdf_file_path);
+    const safePdfDir = path.resolve(PDF_DIR);
+    if (!filePath.startsWith(safePdfDir) || !fs.existsSync(filePath)) return res.status(404).json({ error: 'PDF file missing' });
+    res.download(filePath, txn.pdf_original_name || 'book.pdf');
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

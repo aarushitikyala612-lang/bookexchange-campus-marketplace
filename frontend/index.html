@@ -786,6 +786,7 @@ input,select,textarea{font-family:inherit;}
   <div class="profile-tabs">
     <div class="profile-tabs-inner">
       <div class="ptab active" onclick="switchProfileTab(this,'pMyListings')">My Listings</div>
+      <div class="ptab" onclick="switchProfileTab(this,'pDigitalOrders')">PDF Orders</div>
       <div class="ptab" onclick="switchProfileTab(this,'pRatings')">Ratings & Reviews</div>
       <div class="ptab" onclick="switchProfileTab(this,'pReadingGoals')">Reading Goals</div>
     </div>
@@ -795,6 +796,9 @@ input,select,textarea{font-family:inherit;}
       <div id="profileListings" class="listing-grid">
         <div class="loading-state" style="grid-column:1/-1"><div class="spinner"></div></div>
       </div>
+    </div>
+    <div id="pDigitalOrders" style="display:none;">
+      <div id="digitalOrdersList" style="background:#fff;border-radius:var(--r-lg);border:1px solid var(--gray-200);padding:1.5rem;"></div>
     </div>
     <div id="pRatings" style="display:none;">
       <div id="profileRatingsList" style="background:#fff;border-radius:var(--r-lg);border:1px solid var(--gray-200);padding:1.5rem;"></div>
@@ -891,6 +895,15 @@ input,select,textarea{font-family:inherit;}
             </select>
           </div>
         </div>
+        <div class="form-group">
+          <label>Delivery Mode</label>
+          <select name="fulfillment_mode" id="fulfillmentModeSelect" onchange="toggleFulfillmentFields()">
+            <option value="physical">Physical book only</option>
+            <option value="online">Online PDF only</option>
+            <option value="both">Physical + Online PDF</option>
+          </select>
+          <div class="form-hint">Choose whether buyers collect a physical book, receive a PDF after payment, or both.</div>
+        </div>
         <div class="form-group" id="priceField">
           <label>Price (Rs)</label>
           <input name="price" type="number" min="0" placeholder="e.g. 250  leave blank for negotiable">
@@ -907,6 +920,11 @@ input,select,textarea{font-family:inherit;}
           <label>Book Photo (optional)</label>
           <input type="file" name="image" accept="image/*">
           <div class="form-hint">Upload a photo to get 3 more views!</div>
+        </div>
+        <div class="form-group" id="pdfUploadField" style="display:none;">
+          <label>Book PDF</label>
+          <input type="file" name="pdf_file" accept="application/pdf,.pdf">
+          <div class="form-hint">PDF is released only after you approve the buyer's payment.</div>
         </div>
         <div id="postError" class="form-error"></div>
       </form>
@@ -998,6 +1016,8 @@ input,select,textarea{font-family:inherit;}
     <div class="modal-body">
       <div class="form-group"><label>Full Name</label><input id="editName" placeholder="Your name"></div>
       <div class="form-group"><label>Phone</label><input id="editPhone" placeholder="10-digit number"></div>
+      <div class="form-group"><label>UPI ID</label><input id="editUpiId" placeholder="yourname@upi"></div>
+      <div class="form-group"><label>UPI QR Code</label><input id="editUpiQr" type="file" accept="image/*"><div class="form-hint">Buyers will scan this QR for online PDF payment.</div></div>
       <div class="form-group"><label>Branch / Department</label>
         <select id="editBranch"><option value="">Select</option><option>CSE</option><option>ECE</option><option>MECH</option><option>CIVIL</option><option>EEE</option></select>
       </div>
@@ -1057,6 +1077,10 @@ let heroIndex = 0;
 const $ = id => document.getElementById(id);
 const money = value => value === null || value === undefined || value === '' || Number(value) === 0 ? 'Free' : 'Rs ' + Number(value).toLocaleString('en-IN');
 const esc = value => String(value ?? '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));
+function imageTag(src, alt, fallbackClass) {
+  if (!src) return `<div class="${fallbackClass}">Book</div>`;
+  return `<img src="${esc(src)}" alt="${esc(alt || 'Book cover')}" onerror="this.replaceWith(Object.assign(document.createElement('div'), { className: '${fallbackClass}', textContent: 'Book' }))">`;
+}
 const authHeaders = () => token ? { Authorization: 'Bearer ' + token } : {};
 
 async function api(path, options = {}) {
@@ -1136,17 +1160,18 @@ function logout() {
 function listingCard(l) {
   const img = l.cover_image_override || l.cover_image;
   const badge = l.listing_type || 'sale';
+  const mode = l.fulfillment_mode || 'physical';
   return `<div class="listing-card" onclick="openListing(${l.id || l.listing_id})">
-    <div class="listing-cover">${img ? `<img src="${esc(img)}" alt="${esc(l.title)}">` : '<div class="listing-cover-placeholder">Book</div>'}<span class="book-badge badge-${badge}">${badge}</span></div>
+    <div class="listing-cover">${imageTag(img, l.title, 'listing-cover-placeholder')}<span class="book-badge badge-${badge}">${badge}</span></div>
     <div class="listing-body"><div class="listing-title">${esc(l.title)}</div><div class="listing-author">${esc(l.author || l.subject || '')}</div>
-    <div class="listing-price">${money(l.price)}</div><div class="listing-meta"><span class="book-cond cond-${esc(l.condition_label || l.condition_rating || 'Good')}">${esc(l.condition_label || l.condition_rating || '')}</span><span class="listing-seller">Star ${Number(l.trust_score || 0).toFixed(1)} ${esc(l.seller_name || '')}</span></div></div>
+    <div class="listing-price">${money(l.price)}</div><div class="listing-meta"><span class="book-cond cond-${esc(l.condition_label || l.condition_rating || 'Good')}">${esc(l.condition_label || l.condition_rating || '')}</span><span class="listing-seller">${esc(mode)} ${l.has_pdf ? 'PDF' : ''}</span></div></div>
   </div>`;
 }
 
 function bookCard(b) {
   const id = b.id || b.book_id;
   return `<div class="book-card" onclick="showSearch('${esc(b.title)}')">
-    <div class="book-cover">${b.cover_image ? `<img src="${esc(b.cover_image)}" alt="${esc(b.title)}">` : '<div class="book-cover-placeholder">Book</div>'}</div>
+    <div class="book-cover">${imageTag(b.cover_image, b.title, 'book-cover-placeholder')}</div>
     <div class="book-info"><div class="book-title">${esc(b.title)}</div><div class="book-author">${esc(b.author)}</div><div class="book-rating"><span class="stars"></span><span class="rating-num">${Number(b.rating || 0).toFixed(1)}</span></div></div>
   </div>`;
 }
@@ -1187,11 +1212,18 @@ async function openListing(id) {
   if (l.error) return $('listingModalBody').innerHTML = empty(l.error);
   $('listingModalTitle').textContent = l.title;
   const img = l.cover_image_override || l.cover_image;
-  $('listingModalBody').innerHTML = `<div class="detail-grid"><div class="detail-cover">${img ? `<img src="${esc(img)}">` : '<div class="detail-cover-ph">Book</div>'}</div><div class="detail-info">
-    <div class="detail-price">${money(l.price)}</div><div class="detail-badges"><span class="chip chip-green">${esc(l.listing_type)}</span><span class="chip chip-gold">${esc(l.condition_label)}</span></div>
+  const canBuyPdf = ['online', 'both'].includes(l.fulfillment_mode) && l.has_pdf;
+  const paymentInfo = canBuyPdf ? `<div style="background:var(--paper);border:1px solid var(--gray-200);border-radius:var(--r);padding:12px;margin:12px 0;">
+    <div style="font-weight:700;margin-bottom:6px;">Online PDF payment</div>
+    <div style="font-size:13px;color:var(--gray-500);">UPI: ${esc(l.upi_id || 'Seller has not added UPI ID')}</div>
+    ${l.upi_qr_image ? `<img src="${esc(l.upi_qr_image)}" alt="UPI QR" style="width:140px;height:140px;object-fit:cover;border-radius:8px;margin-top:10px;border:1px solid var(--gray-200);">` : ''}
+  </div>` : '';
+  $('listingModalBody').innerHTML = `<div class="detail-grid"><div class="detail-cover">${imageTag(img, l.title, 'detail-cover-ph')}</div><div class="detail-info">
+    <div class="detail-price">${money(l.price)}</div><div class="detail-badges"><span class="chip chip-green">${esc(l.listing_type)}</span><span class="chip chip-gold">${esc(l.condition_label)}</span><span class="chip">${esc(l.fulfillment_mode || 'physical')}</span></div>
     <p class="detail-desc">${esc(l.condition_notes || l.book_desc || 'No description added.')}</p>
+    ${paymentInfo}
     <table class="detail-table"><tr><td>Author</td><td>${esc(l.author)}</td></tr><tr><td>Subject</td><td>${esc(l.subject)}</td></tr><tr><td>Seller</td><td>${esc(l.seller_name)} - ${esc(l.seller_email || '')}</td></tr></table>
-    <div class="detail-actions"><button class="btn btn-primary" onclick="requireAuth(()=>startChat(${l.id}))">Chat with Seller</button><button class="btn btn-outline" onclick="requireAuth(()=>addWishlist(${l.book_id}))">Wishlist</button></div>
+    <div class="detail-actions"><button class="btn btn-primary" onclick="requireAuth(()=>startChat(${l.id}))">Chat with Seller</button>${canBuyPdf ? `<button class="btn btn-primary" onclick="requireAuth(()=>requestPdfPurchase(${l.id}))">Buy PDF Online</button>` : ''}<button class="btn btn-outline" onclick="requireAuth(()=>addWishlist(${l.book_id}))">Wishlist</button></div>
   </div></div>`;
 }
 
@@ -1203,6 +1235,7 @@ async function loadBookOptions() {
 }
 function toggleAddBook() { const box = $('addBookFields'); box.style.display = box.style.display === 'none' ? 'block' : 'none'; }
 function togglePriceField() { const t = $('listingTypeSelect').value; $('priceField').style.display = t === 'sale' ? 'block' : 'none'; $('exchangeField').style.display = t === 'exchange' ? 'block' : 'none'; }
+function toggleFulfillmentFields() { const m = $('fulfillmentModeSelect').value; $('pdfUploadField').style.display = (m === 'online' || m === 'both') ? 'block' : 'none'; }
 
 async function addBookToCatalog() {
   const f = new FormData($('postListingForm'));
@@ -1220,7 +1253,7 @@ async function submitListing() {
 
 async function loadWishlist() {
   const items = await api('/api/wishlist').catch(e => { toast(e.message, 'error'); return []; });
-  $('wishlistContent').innerHTML = items.map(i => `<div class="wishlist-item"><div class="wishlist-thumb">${i.cover_image ? `<img src="${esc(i.cover_image)}">` : '<div class="wishlist-thumb-ph">Book</div>'}</div><div class="wishlist-info"><div class="wishlist-title">${esc(i.title)}</div><div class="wishlist-author">${esc(i.author)}</div><span class="wishlist-avail">${i.available_count} available</span></div><button class="wishlist-remove" onclick="removeWishlist(${i.book_id})">x</button></div>`).join('') || empty('Your wishlist is empty');
+  $('wishlistContent').innerHTML = items.map(i => `<div class="wishlist-item"><div class="wishlist-thumb">${imageTag(i.cover_image, i.title, 'wishlist-thumb-ph')}</div><div class="wishlist-info"><div class="wishlist-title">${esc(i.title)}</div><div class="wishlist-author">${esc(i.author)}</div><span class="wishlist-avail">${i.available_count} available</span></div><button class="wishlist-remove" onclick="removeWishlist(${i.book_id})">x</button></div>`).join('') || empty('Your wishlist is empty');
 }
 async function addWishlist(bookId) { await api('/api/wishlist', { method: 'POST', body: JSON.stringify({ book_id: bookId }) }).catch(e => toast(e.message, 'error')); toast('Added to wishlist', 'success'); }
 async function removeWishlist(bookId) { await api('/api/wishlist/' + bookId, { method: 'DELETE' }); loadWishlist(); }
@@ -1229,13 +1262,48 @@ async function setPriceAlert() { try { await api('/api/price-alerts', { method: 
 async function loadProfile() {
   const u = await api('/api/users/me').catch(e => { toast(e.message, 'error'); return null; }); if (!u) return;
   $('profileAvatar').textContent = u.name.charAt(0).toUpperCase(); $('profileName').textContent = u.name; $('profileMeta').textContent = `${u.department || 'Student'} ${u.year ? '- Year ' + u.year : ''} - ${u.college_name || ''}`; $('profileTrust').textContent = Number(u.trust_score || 0).toFixed(1); $('profileRatings').textContent = `${u.total_ratings || 0} ratings`;
-  $('editName').value = u.name || ''; $('editPhone').value = u.phone || ''; $('editBranch').value = u.department || ''; $('editBio').value = u.bio || '';
+  $('editName').value = u.name || ''; $('editPhone').value = u.phone || ''; $('editUpiId').value = u.upi_id || ''; $('editBranch').value = u.department || ''; $('editBio').value = u.bio || '';
   $('profileListings').innerHTML = (u.listings || []).map(listingCard).join('') || empty('You have not posted listings yet');
   $('profileRatingsList').innerHTML = (u.ratings_received || []).map(r => `<div class="review-card"><div class="reviewer-name">Rating: ${r.score}/5</div><div class="review-text">${esc(r.review_text || '')}</div></div>`).join('') || 'No ratings yet.';
   $('goalsList').innerHTML = (u.reading_goals || []).map(goalCard).join('') || empty('No reading goals yet');
+  loadDigitalOrders();
 }
-function switchProfileTab(tab, id) { ['pMyListings','pRatings','pReadingGoals'].forEach(x => $(x).style.display = x === id ? 'block' : 'none'); document.querySelectorAll('.ptab').forEach(t => t.classList.remove('active')); tab.classList.add('active'); }
-async function saveProfile() { await api('/api/users/me', { method: 'PUT', body: JSON.stringify({ name: $('editName').value, phone: $('editPhone').value, department: $('editBranch').value, bio: $('editBio').value }) }); closeModal('editProfileModal'); loadProfile(); toast('Profile saved', 'success'); }
+function switchProfileTab(tab, id) { ['pMyListings','pDigitalOrders','pRatings','pReadingGoals'].forEach(x => $(x).style.display = x === id ? 'block' : 'none'); document.querySelectorAll('.ptab').forEach(t => t.classList.remove('active')); tab.classList.add('active'); }
+async function saveProfile() {
+  const body = new FormData();
+  body.append('name', $('editName').value); body.append('phone', $('editPhone').value);
+  body.append('department', $('editBranch').value); body.append('bio', $('editBio').value);
+  body.append('upi_id', $('editUpiId').value);
+  if ($('editUpiQr').files[0]) body.append('upi_qr', $('editUpiQr').files[0]);
+  await api('/api/users/me', { method: 'PUT', body });
+  closeModal('editProfileModal'); loadProfile(); toast('Profile saved', 'success');
+}
+async function requestPdfPurchase(listingId) {
+  try {
+    const data = await api('/api/transactions', { method: 'POST', body: JSON.stringify({ listing_id: listingId, payment_method: 'upi', notes: 'Online PDF purchase request' }) });
+    toast(data.already_requested ? 'PDF request already sent' : 'PDF request sent to seller', 'success');
+    closeModal('listingModal'); showPage('profile');
+  } catch(e) { toast(e.message, 'error'); }
+}
+function digitalOrderCard(o) {
+  const status = o.pdf_access_granted ? 'PDF approved' : 'Waiting for seller approval';
+  const payment = o.role === 'buyer' ? `<div style="font-size:13px;color:var(--gray-500);margin-top:6px;">Pay seller: ${esc(o.seller_upi_id || 'UPI not added')}</div>${o.seller_upi_qr_image ? `<img src="${esc(o.seller_upi_qr_image)}" style="width:110px;height:110px;object-fit:cover;border:1px solid var(--gray-200);border-radius:8px;margin-top:8px;">` : ''}` : '';
+  const sellerAction = o.role === 'seller' && !o.pdf_access_granted ? `<button class="btn btn-primary btn-sm" onclick="approvePdf(${o.id})">Approve & Release PDF</button>` : '';
+  const buyerAction = o.pdf_access_granted ? `<button class="btn btn-outline btn-sm" onclick="downloadPdf(${o.id})">Download PDF</button>` : '';
+  return `<div class="request-card" style="margin-bottom:12px;"><div class="request-title">${esc(o.title)}</div><div class="request-meta">${esc(o.role === 'seller' ? 'Buyer: ' + o.buyer_name : 'Seller: ' + o.seller_name)}</div><div class="request-budget">${money(o.agreed_price)} - ${esc(status)}</div>${payment}<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">${sellerAction}${buyerAction}</div></div>`;
+}
+async function loadDigitalOrders() {
+  const orders = await api('/api/transactions/mine').catch(() => []);
+  const digital = orders.filter(o => ['online', 'both'].includes(o.fulfillment_mode));
+  $('digitalOrdersList').innerHTML = digital.map(digitalOrderCard).join('') || empty('No online PDF orders yet');
+}
+async function approvePdf(id) { await api('/api/transactions/' + id + '/approve-pdf', { method: 'PUT' }); toast('PDF access approved', 'success'); loadDigitalOrders(); }
+async function downloadPdf(id) {
+  const res = await fetch(API_BASE + '/api/transactions/' + id + '/download', { headers: authHeaders() });
+  if (!res.ok) { const err = await res.json().catch(() => ({})); return toast(err.error || 'Download failed', 'error'); }
+  const blob = await res.blob(); const url = URL.createObjectURL(blob); const a = document.createElement('a');
+  a.href = url; a.download = 'book.pdf'; a.click(); URL.revokeObjectURL(url);
+}
 function goalCard(g) { return `<div class="goal-card"><div class="goal-title">${esc(g.title)}</div><div class="goal-date">Target: ${esc(g.target_date || 'Anytime')}</div><span class="goal-status status-${esc(g.status || 'in_progress')}">${esc(g.status || 'in progress')}</span></div>`; }
 async function addGoal() { await api('/api/reading-goals', { method: 'POST', body: JSON.stringify({ title: $('goalTitle').value, target_date: $('goalDate').value, notes: $('goalNotes').value }) }); closeModal('goalModal'); loadProfile(); }
 
@@ -1245,11 +1313,61 @@ async function loadRequests() {
 }
 async function submitBookRequest() { try { await api('/api/book-requests', { method: 'POST', body: JSON.stringify({ title: $('reqTitle').value, author: $('reqAuthor').value, subject: $('reqSubject').value, max_price: $('reqBudget').value, notes: $('reqNotes').value }) }); closeModal('requestModal'); loadRequests(); toast('Request posted', 'success'); } catch(e) { $('reqError').textContent = e.message; } }
 
-async function startChat(listingId) { try { const room = await api('/api/chat/rooms', { method: 'POST', body: JSON.stringify({ listing_id: listingId }) }); closeModal('listingModal'); showPage('chat'); setTimeout(() => openRoom(room.id), 300); } catch (e) { toast(e.message, 'error'); } }
-async function loadChatRooms() { const rooms = await api('/api/chat/rooms').catch(() => []); $('chatRoomsList').innerHTML = rooms.map(r => { const other = currentUser?.id === r.buyer_id ? r.seller_name : r.buyer_name; return `<div class="chat-room" onclick="openRoom(${r.id})"><div class="chat-room-icon">Msg</div><div class="chat-room-info"><div class="chat-room-title">${esc(r.book_title || 'Conversation')}</div><div class="chat-room-sub">${esc(other || '')}</div></div></div>`; }).join('') || '<div class="chat-empty"><p>No conversations yet</p></div>'; }
-async function openRoom(id) { currentRoomId = id; const msgs = await api(`/api/chat/rooms/${id}/messages`).catch(() => []); $('chatMain').innerHTML = `<div class="chat-header">Conversation <span class="chat-typing" id="typing"></span></div><div class="messages-area" id="messagesArea">${msgs.map(messageHtml).join('')}</div><div class="chat-input-area"><textarea id="chatInput" placeholder="Type a message..."></textarea><button class="chat-send-btn" onclick="sendMessage()">></button></div>`; socket?.emit('join_room', id); }
+async function startChat(listingId) {
+  try {
+    const room = await api('/api/chat/rooms', { method: 'POST', body: JSON.stringify({ listing_id: listingId }) });
+    closeModal('listingModal');
+    showPage('chat');
+    await loadChatRooms(room.id);
+    await openRoom(room.id);
+  } catch (e) { toast(e.message, 'error'); }
+}
+async function loadChatRooms(openId = currentRoomId) {
+  const rooms = await api('/api/chat/rooms').catch(e => {
+    $('chatMain').innerHTML = `<div class="chat-empty"><h3 style="color:var(--gray-600);">Unable to load conversations</h3><p style="font-size:13px;">${esc(e.message)}</p></div>`;
+    return [];
+  });
+  $('chatRoomsList').innerHTML = rooms.map(r => {
+    const other = String(currentUser?.id) === String(r.buyer_id) ? r.seller_name : r.buyer_name;
+    return `<div class="chat-room ${String(openId) === String(r.id) ? 'active' : ''}" onclick="openRoom(${r.id})"><div class="chat-room-icon">Msg</div><div class="chat-room-info"><div class="chat-room-title">${esc(r.book_title || 'Conversation')}</div><div class="chat-room-sub">${esc(other || '')}</div>${r.last_message ? `<div class="chat-room-sub">${esc(r.last_message)}</div>` : ''}</div></div>`;
+  }).join('');
+  if (!rooms.length) {
+    $('chatRoomsList').innerHTML = '<div class="chat-empty"><p>No conversations yet</p></div>';
+    $('chatMain').innerHTML = '<div class="chat-empty"><h3 style="color:var(--gray-600);">No conversation selected</h3><p style="font-size:13px;">Open a listing and click Chat with Seller to start.</p></div>';
+    return;
+  }
+  if (!openId) await openRoom(rooms[0].id);
+}
+async function openRoom(id) {
+  currentRoomId = id;
+  document.querySelectorAll('.chat-room').forEach(room => room.classList.remove('active'));
+  document.querySelector(`.chat-room[onclick="openRoom(${id})"]`)?.classList.add('active');
+  const msgs = await api(`/api/chat/rooms/${id}/messages`).catch(e => {
+    $('chatMain').innerHTML = `<div class="chat-empty"><h3 style="color:var(--gray-600);">Unable to open conversation</h3><p style="font-size:13px;">${esc(e.message)}</p></div>`;
+    return null;
+  });
+  if (!msgs) return;
+  $('chatMain').innerHTML = `<div class="chat-header">Conversation <span class="chat-typing" id="typing"></span></div><div class="messages-area" id="messagesArea">${msgs.map(messageHtml).join('') || '<div class="chat-empty"><p>No messages yet. Say hello.</p></div>'}</div><div class="chat-input-area"><textarea id="chatInput" placeholder="Type a message..."></textarea><button class="chat-send-btn" onclick="sendMessage()">></button></div>`;
+  socket?.emit('join_room', id);
+  $('chatMain').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  setTimeout(() => $('chatInput')?.focus(), 100);
+}
 function messageHtml(m) { const mine = String(m.sender_id) === String(currentUser?.id); return `<div class="msg ${mine ? 'msg-mine' : 'msg-other'}"><div class="msg-sender">${esc(m.sender_name || (mine ? 'You' : 'Student'))}</div>${esc(m.content || m.message_text)}</div>`; }
-function sendMessage() { const input = $('chatInput'); if (!input?.value.trim()) return; socket?.emit('send_message', { room_id: currentRoomId, content: input.value }); input.value = ''; }
+async function sendMessage() {
+  const input = $('chatInput');
+  const content = input?.value.trim();
+  if (!content || !currentRoomId) return;
+  input.value = '';
+  if (socket?.connected) {
+    socket.emit('send_message', { room_id: currentRoomId, content });
+    return;
+  }
+  const msg = await api(`/api/chat/rooms/${currentRoomId}/messages`, { method: 'POST', body: JSON.stringify({ content }) }).catch(e => {
+    toast(e.message, 'error');
+    return null;
+  });
+  if (msg && $('messagesArea')) $('messagesArea').insertAdjacentHTML('beforeend', messageHtml(msg));
+}
 function connectSocket() { if (!window.io || socket) return; socket = io(API_BASE, { auth: { token } }); socket.on('new_message', m => { if (String(m.room_id) === String(currentRoomId) && $('messagesArea')) $('messagesArea').insertAdjacentHTML('beforeend', messageHtml(m)); }); }
 
 async function toggleNotifications() { if (!token) return openModal('loginModal'); $('notifPanel').classList.toggle('open'); const notes = await api('/api/notifications').catch(() => []); $('notifCount').style.display = notes.filter(n => !n.is_read).length ? 'flex' : 'none'; $('notifCount').textContent = notes.filter(n => !n.is_read).length; $('notifList').innerHTML = notes.map(n => `<div class="notif-item ${n.is_read ? '' : 'unread'}">${esc(n.message)}<div class="notif-type">${esc(n.type)}</div></div>`).join('') || '<div class="notif-empty">No notifications yet</div>'; }

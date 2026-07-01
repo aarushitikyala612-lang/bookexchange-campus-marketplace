@@ -43,6 +43,8 @@ CREATE TABLE Users (
     year            TINYINT         DEFAULT NULL,          -- 1–4
     bio             TEXT            DEFAULT NULL,
     profile_picture VARCHAR(255)    DEFAULT NULL,
+    upi_id          VARCHAR(100)    DEFAULT NULL,
+    upi_qr_image    VARCHAR(255)    DEFAULT NULL,
     trust_score     DECIMAL(3,2)    DEFAULT 5.00,
     total_ratings   INT             DEFAULT 0,
     total_sales     INT             DEFAULT 0,            -- completed sale transactions
@@ -100,12 +102,15 @@ CREATE TABLE Listings (
     seller_id           INT             NOT NULL,
     book_id             INT             NOT NULL,
     listing_type        ENUM('sale','exchange','donation') NOT NULL,
+    fulfillment_mode    ENUM('physical','online','both') DEFAULT 'physical',
     price               DECIMAL(8,2)    DEFAULT NULL,
     negotiable          TINYINT(1)      DEFAULT 1,
     condition_rating    ENUM('Good','Fair','Poor')         NOT NULL,
     condition_notes     TEXT            DEFAULT NULL,
     photos              JSON            DEFAULT NULL,       -- array of image URLs
     cover_image_override VARCHAR(255)   DEFAULT NULL,      -- overrides book cover for this listing
+    pdf_file_path       VARCHAR(255)    DEFAULT NULL,      -- private PDF path for online books
+    pdf_original_name   VARCHAR(255)    DEFAULT NULL,
     status              ENUM('active','sold','reserved','closed','flagged') DEFAULT 'active',
     preferred_exchange  VARCHAR(200)    DEFAULT NULL,
     location            VARCHAR(100)    DEFAULT NULL,       -- campus zone / hostel block
@@ -202,6 +207,8 @@ CREATE TABLE Transactions (
     status              ENUM('pending','confirmed','completed','disputed','cancelled') DEFAULT 'pending',
     confirmed_by_buyer  TINYINT(1)      DEFAULT 0,          -- NEW: dual confirmation
     confirmed_by_seller TINYINT(1)      DEFAULT 0,
+    pdf_access_granted  TINYINT(1)      DEFAULT 0,
+    pdf_approved_at     DATETIME        DEFAULT NULL,
     completed_at        DATETIME        DEFAULT NULL,
     notes               TEXT            DEFAULT NULL,
     created_at          DATETIME        DEFAULT CURRENT_TIMESTAMP,
@@ -644,15 +651,15 @@ INSERT INTO Books (title, author, isbn, subject, category, semester, publisher, 
 ('Strength of Materials',                    'R.K. Bansal',         '9788177005578', 'Strength of Materials','MECH',3, 'Laxmi Publications', 2018, 'Comprehensive strength of materials.',              'https://covers.openlibrary.org/b/isbn/9788177005578-L.jpg', 4.2, 276),
 ('Artificial Intelligence: A Modern Approach','Stuart Russell',     '9780136042594', 'Artificial Intelligence','CSE',7,'Prentice Hall',2009,'The most comprehensive AI textbook.',             'https://covers.openlibrary.org/b/isbn/9780136042594-L.jpg', 4.9, 678);
 
-INSERT INTO Listings (seller_id, book_id, listing_type, price, condition_rating, condition_notes, status) VALUES
-(1, 1, 'sale',     280, 'Good', 'Barely used, no highlighting.',             'active'),
-(2, 2, 'sale',     450, 'Good', 'Some pencil marks, easily erasable.',       'active'),
-(3, 5, 'donation', NULL,'Fair', 'Some wear but fully readable.',             'active'),
-(4, 3, 'exchange', NULL,'Good', 'Looking to exchange for Networking/OS.',    'active'),
-(5, 6, 'sale',     320, 'Good', 'Very good condition, original price ₹650.', 'active'),
-(1, 4, 'sale',     390, 'Fair', 'Some highlighting but all content visible.','active'),
-(2, 7, 'exchange', NULL,'Fair', 'Exchange for Fluid Mechanics.',             'active'),
-(3, 8, 'sale',     520, 'Good', 'Mint condition, moving to digital.',        'active');
+INSERT INTO Listings (seller_id, book_id, listing_type, fulfillment_mode, price, condition_rating, condition_notes, status) VALUES
+(1, 1, 'sale',     'physical', 280, 'Good', 'Barely used, no highlighting.',             'active'),
+(2, 2, 'sale',     'physical', 450, 'Good', 'Some pencil marks, easily erasable.',       'active'),
+(3, 5, 'donation', 'physical', NULL,'Fair', 'Some wear but fully readable.',             'active'),
+(4, 3, 'exchange', 'physical', NULL,'Good', 'Looking to exchange for Networking/OS.',    'active'),
+(5, 6, 'sale',     'physical', 320, 'Good', 'Very good condition, original price ₹650.', 'active'),
+(1, 4, 'sale',     'physical', 390, 'Fair', 'Some highlighting but all content visible.','active'),
+(2, 7, 'exchange', 'physical', NULL,'Fair', 'Exchange for Fluid Mechanics.',             'active'),
+(3, 8, 'sale',     'physical', 520, 'Good', 'Mint condition, moving to digital.',        'active');
 
 -- ============================================================
 -- USEFUL QUERIES (commented reference)
